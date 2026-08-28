@@ -1,0 +1,4 @@
+interface:
+  display_name: "JCB Spring Security Authentication"
+  short_description: "Build Spring Security login, logout, provider, and auth exception flows in JCB style."
+  default_prompt: "Use this skill when designing, implementing, or reviewing Spring Security login, logout, AuthenticationProvider registration, principal, and auth exception flows in JCB Java Web projects."

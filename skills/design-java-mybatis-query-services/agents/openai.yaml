@@ -1,0 +1,4 @@
+interface:
+  display_name: "Java MyBatis Query Services"
+  short_description: "Entity-first MyBatis query services."
+  default_prompt: "Use $design-java-mybatis-query-services to design or review this Java MyBatis query service."

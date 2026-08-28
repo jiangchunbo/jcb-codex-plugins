@@ -1,0 +1,7 @@
+interface:
+  display_name: "Ant Design 管理工作台体验"
+  short_description: "统一 Ant Design 管理工作台的交互设计、实现与评审"
+  default_prompt: "使用 $design-ant-management-workbenches 设计或评审这个 Ant Design 管理工作台的交互体验。"
+
+policy:
+  allow_implicit_invocation: true
