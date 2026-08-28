@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "playwright-fast": {
+      "cwd": ".",
+      "command": "bash",
+      "args": ["./scripts/start.sh"],
+      "env": {
+        "PLAYWRIGHT_FAST_TTL_MS": "1800000"
+      },
+      "startup_timeout_sec": 5,
+      "tool_timeout_sec": 15,
+      "enabled_tools": ["run", "reset", "status"]
+    }
+  }
+}

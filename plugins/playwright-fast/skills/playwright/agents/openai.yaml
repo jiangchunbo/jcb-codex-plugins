@@ -1,0 +1,4 @@
+interface:
+  display_name: "极速 Playwright"
+  short_description: "Persistent MCP-first browser automation"
+  default_prompt: "Use $playwright to run this browser flow through the persistent MCP with one compact contract."

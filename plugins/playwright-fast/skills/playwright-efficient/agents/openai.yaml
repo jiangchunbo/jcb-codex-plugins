@@ -1,0 +1,4 @@
+interface:
+  display_name: "极速 Playwright"
+  short_description: "以持久 JSONL 契约压缩浏览器测试延迟与证据开销"
+  default_prompt: "Use $playwright-efficient to run this browser flow in ULTRA mode with one persistent JSONL contract and minimal evidence."

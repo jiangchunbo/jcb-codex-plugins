@@ -1,0 +1,21 @@
+{
+  "name": "playwright-fast",
+  "version": "0.1.0+codex.20260828021848",
+  "description": "Persistent, contract-driven Playwright automation for low-latency Codex browser work.",
+  "author": {
+    "name": "JCB"
+  },
+  "interface": {
+    "displayName": "Playwright Fast",
+    "shortDescription": "Run browser flows through a persistent Chromium runtime.",
+    "longDescription": "Exposes run, reset, and status tools backed by one reusable Playwright browser, with origin-scoped storage, request-aware mocks, CORS handling, geometry checks, and a 30-minute idle TTL.",
+    "developerName": "JCB",
+    "category": "Developer",
+    "capabilities": [
+      "Browser automation",
+      "Visual testing"
+    ],
+    "defaultPrompt": "Run this browser flow with one compact Playwright Fast contract."
+  },
+  "mcpServers": "./.mcp.json"
+}

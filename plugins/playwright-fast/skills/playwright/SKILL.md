@@ -1,0 +1,50 @@
+---
+name: playwright
+description: Automate a real browser for navigation, form interactions, screenshots, data extraction, UI-flow debugging, frontend smoke tests, rendered visual QA, and responsive checks. Use for every request involving Playwright, playwright-cli, browser automation, browser screenshots, or interactive frontend validation. Prefer the persistent playwright-fast MCP and always use this skill together with playwright-efficient.
+---
+
+# Playwright
+
+Drive one real-browser flow with the smallest possible contract. Let `playwright-efficient` choose the evidence tier and scheduling policy.
+
+## Use The Persistent MCP First
+
+Call the `run` tool from the `playwright-fast` MCP directly. Do not call `status` first; `run` starts or reuses Chromium automatically. Batch navigation, authentication fixtures, request mocks, interactions, reads, and assertions into one tool call.
+
+```json
+{
+  "id": "save",
+  "url": "http://127.0.0.1:3000/edit",
+  "viewport": { "width": 1440, "height": 900 },
+  "steps": [{ "op": "click", "target": { "role": "button", "name": "Save" } }],
+  "expect": [{ "target": { "text": "Saved" }, "state": "visible" }],
+  "evidence": "ultra"
+}
+```
+
+Use these tools only:
+
+- `run`: execute one flow contract and reuse browser, context, page, cookies, local storage, and routes.
+- `reset`: discard runtime state only after corruption, explicit isolation, or a user request.
+- `status`: diagnose warmth and the 30-minute idle TTL only when that state matters.
+
+Prefer semantic targets: `role` with `name`, `label`, `placeholder`, `testId`, then scoped `css`. Use `within`, `first`, or `nth` only when strict matching is unsuitable. Use per-step `timeoutMs` only when a known operation needs a different ceiling.
+
+The runtime defaults to a `1440x900` viewport, 2-second locator timeout, 5-second navigation timeout, `domcontentloaded`, reduced motion, blocked service workers, and a 30-minute idle TTL. Follow repository viewport rules when they differ.
+
+Do not configure test accounts, persist credentials, or save storage state unless the user explicitly authorizes it.
+
+## Fall Back Through The JSONL Driver
+
+When the MCP tool is unavailable or lacks a required capability, use the persistent JSONL driver from `playwright-efficient` before the CLI. The driver is the normal local fallback; the CLI is last resort only.
+
+Before CLI use, verify `npx` once, then use one named session and one `run-code` flow where possible:
+
+```bash
+command -v npx >/dev/null 2>&1
+PLAYWRIGHT_WRAPPER="${CODEX_HOME:-${HOME}/.codex}/skills/playwright/scripts/playwright_cli.sh"
+test -x "$PLAYWRIGHT_WRAPPER"
+PLAYWRIGHT_CLI_SESSION=fast "$PLAYWRIGHT_WRAPPER" open https://example.com
+```
+
+When the CLI uses element refs, snapshot first and refresh refs after navigation or substantial DOM changes. Preserve the MCP state for one targeted diagnostic before falling back.
