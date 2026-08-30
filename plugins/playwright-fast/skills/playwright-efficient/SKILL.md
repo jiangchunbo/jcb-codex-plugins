@@ -71,7 +71,7 @@ Supported steps:
 - `readBoundingBox` for `x`, `y`, `width`, `height`, `right`, and `bottom`
 - `readComputedStyle` with `properties`, for example `{"op":"readComputedStyle","target":{"css":".footer"},"properties":["display","padding-top"],"as":"footerStyle"}`
 - add `"popup":"switch"` to a click that opens a new page; the runtime waits atomically and continues on the popup
-- use `evaluate` with `expression`, optional JSON `arg`, `as`, and optional `frame` only when declarative steps cannot express the operation
+- use `evaluate` with a JavaScript expression or function expression, optional JSON `arg`, `as`, and optional `frame` only when declarative steps cannot express the operation
 
 Supported expectations:
 

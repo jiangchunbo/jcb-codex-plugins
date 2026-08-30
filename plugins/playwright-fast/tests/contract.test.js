@@ -104,7 +104,7 @@ function flowContract(id) {
       },
       {
         op: "evaluate",
-        expression: "({ heading: document.querySelector('h2').textContent, seed: arg.seed })",
+        expression: "arg => ({ heading: document.querySelector('h2').textContent, seed: arg.seed })",
         arg: { seed: 7 },
         frame: { name: "details" },
         as: "frameEvaluation",

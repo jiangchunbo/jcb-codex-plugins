@@ -339,10 +339,13 @@ class FlowRuntime {
     }
     if (step.op === "evaluate") {
       const target = await this.resolveEvaluationTarget(step.frame);
-      const value = await target.evaluate(({ expression, arg }) => eval(expression), {
-        expression: step.expression,
-        arg: step.arg,
-      });
+      const value = await target.evaluate(
+        ({ expression, arg }) => {
+          const evaluated = eval(expression);
+          return typeof evaluated === "function" ? evaluated(arg) : evaluated;
+        },
+        { expression: step.expression, arg: step.arg },
+      );
       outputs[step.as || "evaluation"] = value;
       return;
     }
@@ -666,7 +669,7 @@ const stepSchema = {
     timeoutMs: { type: "integer", minimum: 1 },
     waitUntil: { type: "string", enum: [...supportedWaitUntil] },
     popup: { type: "string", enum: ["switch"], description: "On click, atomically wait for and switch to the new page." },
-    expression: { type: "string", minLength: 1, description: "Page expression for evaluate; optional arg is available as arg." },
+    expression: { type: "string", minLength: 1, description: "Page expression or function expression for evaluate; optional arg is available and passed to functions." },
     arg: {},
     frame: { $ref: "#/$defs/frame" },
   },
