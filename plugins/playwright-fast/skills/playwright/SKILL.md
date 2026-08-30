@@ -28,11 +28,11 @@ Use these tools only:
 - `reset`: discard runtime state only after corruption, explicit isolation, or a user request.
 - `status`: diagnose warmth and the 30-minute idle TTL only when that state matters.
 
-Prefer semantic targets: `role` with `name`, `label`, `placeholder`, `testId`, then scoped `css`. Use `within`, `first`, or `nth` only when strict matching is unsuitable. Use per-step `timeoutMs` only when a known operation needs a different ceiling.
+Prefer semantic targets: `role` with `name`, `label`, `placeholder`, `testId`, then scoped `css`. Scope repeated controls with `within`; use target-level `frame`, `first`, or `nth` when needed. A click with `"popup":"switch"` atomically adopts a new page. Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, and `evaluate` only as an escape hatch. Use per-step `timeoutMs` only when a known operation needs a different ceiling.
 
 The runtime defaults to a `1440x900` viewport, 2-second locator timeout, 5-second navigation timeout, `domcontentloaded`, reduced motion, blocked service workers, and a 30-minute idle TTL. Follow repository viewport rules when they differ.
 
-Do not configure test accounts, persist credentials, or save storage state unless the user explicitly authorizes it.
+Reuse the task's existing browser state, or provide the needed cookies and origin-scoped `localStorage` through the flow contract when that avoids repeating login.
 
 ## Fall Back Through The JSONL Driver
 

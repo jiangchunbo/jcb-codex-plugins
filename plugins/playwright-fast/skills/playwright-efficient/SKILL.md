@@ -56,18 +56,22 @@ Supported targets:
 - `{"role":"button","name":"Save"}`
 - `{"text":"Saved"}`, `{"label":"Name"}`, `{"placeholder":"Search"}`
 - `{"testId":"save"}` or `{"css":".status"}`
-- add `within`, `first`, or `nth` only when strict resolution is unsuitable
+- scope repeated controls to an ancestor with `within`; add `hasText` to that ancestor for multi-field rows, for example `{"role":"button","name":"Sign in","within":{"css":"tr","hasText":["13900000000","Administrator"]}}`
+- add `frame`, `first`, or `nth` when needed; frames accept exact `name`, partial `urlIncludes`, or iframe `css`
 
 Semantic locator names are exact by default. Ensure decorative fixture icons use `aria-hidden="true"`; otherwise use the real accessible name, `exact:false`, a test id, or scoped CSS deliberately.
 
 Supported steps:
 
+- `goto` with `url` for mid-flow navigation
 - `setContent`, `click`, `fill`, `clear`, `type`, `press`, `select`
 - `check`, `uncheck`, `hover`, `focus`, `wait`; use targetless `ms` only for a known debounce or animation
 - `readText`, `readAllText`; use `as` to name returned values
 - `readAttribute` with `attribute`, for example `{"op":"readAttribute","target":{"css":".save"},"attribute":"class","as":"className"}`
 - `readBoundingBox` for `x`, `y`, `width`, `height`, `right`, and `bottom`
 - `readComputedStyle` with `properties`, for example `{"op":"readComputedStyle","target":{"css":".footer"},"properties":["display","padding-top"],"as":"footerStyle"}`
+- add `"popup":"switch"` to a click that opens a new page; the runtime waits atomically and continues on the popup
+- use `evaluate` with `expression`, optional JSON `arg`, `as`, and optional `frame` only when declarative steps cannot express the operation
 
 Supported expectations:
 
@@ -85,7 +89,15 @@ Use declarative `cookies`, origin-scoped `localStorage`, and first-match `routes
 
 Route rules accept `url` glob, optional `method`, partial-JSON `requestBody` or string `requestBodyIncludes`, and one of `json`, `body`, or `abort`. Set `cors:true` to fulfill matching OPTIONS preflights and add response CORS headers. Optional `status`, `headers`, and `contentType` customize fulfillment. Set `captureRouteCalls:true` only when matched-request evidence is needed.
 
-`localStorage` entries are injected before navigation and retained in the persistent context until `reset`. Use the exact origin, including scheme, host, and port. Prefer this over driving a fake login when authentication is client-local; never inject real credentials or tokens.
+Use `captureResponses` when the result comes from a real network response. Listeners are installed before navigation and steps; each rule uses a URL glob, optional method, `json` or `text` body, and an `as` output key:
+
+```json
+{"captureResponses":[{"url":"**/api/share-list","method":"GET","body":"json","as":"shareList"}]}
+```
+
+One match is required by default. Set `count` for repeated calls, `required:false` for best-effort capture, or `maxBodyBytes` to change the 1 MB body limit. Each result includes `url`, `method`, `status`, and parsed `body`; responses with non-text content types do not count as matches.
+
+`localStorage` entries are injected before navigation and retained in the persistent context until `reset`. Use the exact origin, including scheme, host, and port. When authentication is represented in client-side state, seed the required `localStorage` entries before navigation to avoid repeating the login flow.
 
 Use `reset: true` only when state isolation is required. Reusing context and the current page is faster.
 
@@ -116,7 +128,7 @@ Do not add a second viewport, screenshot, retry, trace, accessibility sweep, net
 - Prefer application contracts such as `data-testid` and `data-app-ready`.
 - Reuse an already-running server. If a package-manager command attempts installation, auditing, or lockfile mutation, stop it and use an equivalent existing local binary only when its mode and arguments are known.
 - Block `font` or `media` resources only for non-visual flows by passing `blockResourceTypes`.
-- Reuse approved storage state when allowed, but never write credentials or storage state into the repository or output.
+- Reuse existing storage state when it helps keep the flow fast and consistent.
 - Allow direct DOM reads for state probes. Keep a real locator-driven action only when the claim is about user interaction.
 
 ## Escalate Once
@@ -133,7 +145,7 @@ PLAYWRIGHT_WRAPPER="${CODEX_HOME:-${HOME}/.codex}/skills/playwright/scripts/play
 test -x "$PLAYWRIGHT_WRAPPER"
 ```
 
-Use one named CLI session and one `run-code` function for each coherent flow. Set `page.setDefaultTimeout(5000)` and `page.setDefaultNavigationTimeout(5000)` at the start of that function; the CLI daemon otherwise defaults locator waits to 30 seconds. Use separate commands only for ref discovery or targeted failure diagnosis. Wait for each unified command session to complete before issuing the next command; never launch `close`, `open`, and `run-code` in a loop that discards returned session IDs.
+Use one named CLI session per coherent flow and keep operations in as few `run-code` calls as practical. For a new session, call `open` once before its first `run-code`; later `run-code` calls reuse the same browser and page state. A `run-code` callback receives `page` directly, so use `async (page) => { ... }`, not `async ({ page }) => { ... }`. Set `page.setDefaultTimeout(5000)` and `page.setDefaultNavigationTimeout(5000)` at the start of each callback; the CLI daemon otherwise defaults locator waits to 30 seconds. Use separate commands only for ref discovery or targeted failure diagnosis. Wait for each unified command session to complete before issuing the next command; never launch `close`, `open`, and `run-code` in a loop that discards returned session IDs.
 
 ## Report Compactly
 
