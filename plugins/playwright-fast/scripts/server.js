@@ -288,7 +288,7 @@ class PersistentRuntime {
 const tools = [
   {
     name: "run",
-    description: "Run one batched Playwright contract on the persistent page, including scoped locators, popups, frames, and response capture.",
+    description: "Run one batched Playwright contract on the persistent page. Browser and storage state can persist; request routes and resource blocking are scoped to this call.",
     inputSchema: contractSchema,
   },
   {

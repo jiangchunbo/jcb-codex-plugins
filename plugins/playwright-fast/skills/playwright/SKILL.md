@@ -24,7 +24,7 @@ Call the `run` tool from the `playwright-fast` MCP directly. Do not call `status
 
 Use these tools only:
 
-- `run`: execute one flow contract and reuse browser, context, page, cookies, local storage, and routes.
+- `run`: execute one flow contract and reuse browser, context, page, cookies, and local storage. Request routes and resource blocking are installed only for that call and removed before it returns.
 - `reset`: discard runtime state only after corruption, explicit isolation, or a user request.
 - `status`: diagnose warmth and the 30-minute idle TTL only when that state matters.
 
@@ -32,7 +32,9 @@ When a locator wait fails after an XHR or fetch failure, `run` keeps `failureKin
 
 Prefer semantic targets: `role` with `name`, `label`, `placeholder`, `testId`, then scoped `css`. Scope repeated controls with `within`; use target-level `frame`, `first`, or `nth` when needed. A click with `"popup":"switch"` atomically adopts a new page. Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, and `evaluate` only as an escape hatch. Use `cors:true` to add credential-compatible headers and handle OPTIONS requests surfaced by Playwright; claim that a preflight occurred only when captured route calls contain `cors-preflight`. Use per-step `timeoutMs` only when a known operation needs a different ceiling.
 
-Top-level `ready` runs after top-level navigation and before every `steps` entry. When `setContent` or `goto` in `steps` creates the target state, use a later `wait` step instead of top-level `ready`.
+Top-level `ready` uses the same expectation shape as one `expect` entry, so locator readiness must nest the locator under `target`: `"ready":{"target":{"text":"Ready"},"state":"visible"}`. It runs after top-level navigation and before every `steps` entry. When `setContent` or `goto` in `steps` creates the target state, use a later `wait` step instead of top-level `ready`.
+
+Persistent browser state does not make network fixtures persistent. Repeat every required `routes` rule in each `run` that navigates, reloads, or otherwise fetches the mocked data. Do not use `reset` merely to change route rules; the next call installs its own rules. In URL globs, `?` matches exactly one character rather than making the query string optional, so `**/toc/orders?*` does not match `/toc/orders`; use `**/toc/orders*` when both forms are in scope.
 
 The runtime defaults to a `1440x900` viewport, 2-second locator timeout, 5-second navigation timeout, `domcontentloaded`, reduced motion, blocked service workers, and a 30-minute idle TTL. Follow repository viewport rules when they differ.
 

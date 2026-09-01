@@ -248,7 +248,14 @@ test("schema exposes scoped targets and validates new operations", () => {
   assert(contractSchema.$defs.step.properties.popup.enum.includes("switch"));
   assert(contractSchema.$defs.step.properties.op.enum.includes("goto"));
   assert(contractSchema.$defs.step.properties.op.enum.includes("evaluate"));
+  assert.match(contractSchema.properties.ready.description, /nest the locator under target/);
+  assert.match(contractSchema.properties.routes.description, /scoped to this run/);
   validateContract(flowContract("validation"));
+  validateContract({ ready: { target: { text: "Ready" }, state: "visible" } });
+  assert.throws(
+    () => validateContract({ ready: { text: "Ready", state: "visible" } }),
+    /ready target is required/,
+  );
   assert.throws(
     () => validateContract({ steps: [{ op: "fill", target: { css: "input" }, popup: "switch" }] }),
     /popup is only supported for click/,
@@ -265,6 +272,41 @@ test("schema exposes scoped targets and validates new operations", () => {
     () => validateContract({ steps: [{ op: "click", target: { css: "button", hasText: [] } }] }),
     /hasText must be a non-empty string or string array/,
   );
+});
+
+test("route glob makes query requirements explicit", async () => {
+  let handler;
+  const context = {
+    route: async (_pattern, nextHandler) => { handler = nextHandler; },
+  };
+  const flow = new FlowRuntime({ context, page: {} });
+  const dispatch = async (url) => {
+    let action;
+    await handler({
+      request: () => ({
+        method: () => "GET",
+        url: () => url,
+        resourceType: () => "fetch",
+        headers: () => ({}),
+        postData: () => null,
+      }),
+      continue: async () => { action = "continue"; },
+      fulfill: async () => { action = "fulfill"; },
+    });
+    return action;
+  };
+
+  await flow.installNetworkRules({
+    routes: [{ url: "**/toc/orders?*", method: "GET", json: {} }],
+  }, []);
+  assert.equal(await dispatch("http://api.test/toc/orders"), "continue");
+  assert.equal(await dispatch("http://api.test/toc/orders?page=1"), "fulfill");
+
+  await flow.installNetworkRules({
+    routes: [{ url: "**/toc/orders*", method: "GET", json: {} }],
+  }, []);
+  assert.equal(await dispatch("http://api.test/toc/orders"), "fulfill");
+  assert.equal(await dispatch("http://api.test/toc/orders?page=1"), "fulfill");
 });
 
 test("credentialed preflight selects the matching method rule and records status", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "playwright-fast",
-  "version": "0.1.0+codex.20260901101401",
+  "version": "0.1.0+codex.20260901110608",
   "description": "Persistent, contract-driven Playwright automation for low-latency Codex browser work.",
   "author": {
     "name": "JCB"
