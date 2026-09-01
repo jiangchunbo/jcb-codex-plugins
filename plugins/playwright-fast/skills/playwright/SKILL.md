@@ -28,7 +28,11 @@ Use these tools only:
 - `reset`: discard runtime state only after corruption, explicit isolation, or a user request.
 - `status`: diagnose warmth and the 30-minute idle TTL only when that state matters.
 
-Prefer semantic targets: `role` with `name`, `label`, `placeholder`, `testId`, then scoped `css`. Scope repeated controls with `within`; use target-level `frame`, `first`, or `nth` when needed. A click with `"popup":"switch"` atomically adopts a new page. Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, and `evaluate` only as an escape hatch. Use per-step `timeoutMs` only when a known operation needs a different ceiling.
+When a locator wait fails after an XHR or fetch failure, `run` keeps `failureKind: "locator"` and includes compact `requestFailures` as a possible cause, not a proven cause. Check whether the failed request feeds the target before changing mocks or locator timeouts. If runtime state must be discarded and another flow will run immediately, set `reset:true` on that next `run` instead of spending a separate `reset` round trip.
+
+Prefer semantic targets: `role` with `name`, `label`, `placeholder`, `testId`, then scoped `css`. Scope repeated controls with `within`; use target-level `frame`, `first`, or `nth` when needed. A click with `"popup":"switch"` atomically adopts a new page. Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, and `evaluate` only as an escape hatch. Use `cors:true` to add credential-compatible headers and handle OPTIONS requests surfaced by Playwright; claim that a preflight occurred only when captured route calls contain `cors-preflight`. Use per-step `timeoutMs` only when a known operation needs a different ceiling.
+
+Top-level `ready` runs after top-level navigation and before every `steps` entry. When `setContent` or `goto` in `steps` creates the target state, use a later `wait` step instead of top-level `ready`.
 
 The runtime defaults to a `1440x900` viewport, 2-second locator timeout, 5-second navigation timeout, `domcontentloaded`, reduced motion, blocked service workers, and a 30-minute idle TTL. Follow repository viewport rules when they differ.
 

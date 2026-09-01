@@ -4,9 +4,10 @@ const path = require("node:path");
 const readline = require("node:readline");
 const { spawn } = require("node:child_process");
 const { after, before, test } = require("node:test");
-const { contractSchema, validateContract } = require("../shared/contract");
+const { FlowRuntime, contractSchema, validateContract } = require("../shared/contract");
 
 const pluginDir = path.resolve(__dirname, "..");
+const credentialedMockUrl = "http://127.0.0.1:1/api/credentialed";
 let fixtureServer;
 let fixtureOrigin;
 
@@ -33,7 +34,11 @@ before(async () => {
               fetch('/api/data').then(response => response.json()),
               fetch('/api/many?i=1').then(response => response.json()),
               fetch('/api/many?i=2').then(response => response.json()),
-              fetch('/api/mocked').then(response => response.json())
+              fetch('/api/mocked').then(response => response.json()),
+              fetch('${credentialedMockUrl}', {
+                credentials: 'include',
+                headers: { 'x-playwright-fixture': 'credentialed' }
+              }).then(response => response.json())
             ])
               .then(() => document.querySelector('#load').dataset.done = 'true');
           };
@@ -87,7 +92,10 @@ function flowContract(id) {
       { url: "**/api/many**", method: "GET", body: "json", as: "many", count: 2 },
       { url: "**/binary", body: "json", as: "binary", required: false },
     ],
-    routes: [{ url: "**/api/mocked", method: "GET", json: { mocked: true } }],
+    routes: [
+      { url: "**/api/mocked", method: "GET", json: { mocked: true } },
+      { url: credentialedMockUrl, method: "GET", cors: true, json: { credentialed: true } },
+    ],
     captureRouteCalls: true,
     steps: [
       { op: "click", target: { role: "button", name: "Load data" } },
@@ -137,7 +145,8 @@ function assertFlowResult(result) {
   assert.deepEqual(result.outputs.data.body, { ok: true, source: "fixture" });
   assert.deepEqual(result.outputs.many.map((entry) => entry.body.id).sort(), [1, 2]);
   assert.equal(result.outputs.binary, null);
-  assert(result.routeCalls.some((call) => call.url.endsWith("/api/mocked") && call.action === "fulfill"));
+  assert(result.routeCalls.some((call) => call.url.endsWith("/api/mocked") && call.action === "fulfill" && call.status === 200));
+  assert(result.routeCalls.some((call) => call.url === credentialedMockUrl && call.action === "fulfill" && call.status === 200));
 }
 
 function missingPopupContract(id) {
@@ -159,6 +168,29 @@ function assertMissingPopupResult(result) {
     { index: 0, op: "readText", ok: true },
     { index: 1, op: "click", ok: false },
   ]);
+}
+
+function requestFailureContract(id) {
+  return {
+    id,
+    timeoutMs: 200,
+    steps: [
+      {
+        op: "setContent",
+        html: "<!doctype html><main>Network probe</main><script>fetch('http://127.0.0.1:1/unhandled?token=secret').then(() => document.body.dataset.done = 'true').catch(() => {})<\/script>",
+      },
+      { op: "readText", target: { css: "main" }, as: "probe" },
+      { op: "wait", target: { css: "body[data-done=true]" } },
+    ],
+  };
+}
+
+function assertRequestFailureEvidence(result) {
+  assert.equal(result.ok, false);
+  assert.equal(result.failureKind, "locator");
+  assert.equal(result.outputs.probe, "Network probe");
+  assert(result.requestFailures.some((failure) => failure.resourceType === "fetch" && failure.url.endsWith("/unhandled")));
+  assert(!JSON.stringify(result.requestFailures).includes("secret"));
 }
 
 function lineClient(command, args, cwd) {
@@ -235,6 +267,72 @@ test("schema exposes scoped targets and validates new operations", () => {
   );
 });
 
+test("credentialed preflight selects the matching method rule and records status", async () => {
+  let handler;
+  const context = {
+    route: async (_pattern, nextHandler) => { handler = nextHandler; },
+  };
+  const flow = new FlowRuntime({ context, page: {} });
+  const routeCalls = [];
+  await flow.installNetworkRules({
+    captureRouteCalls: true,
+    routes: [
+      { url: "**/api/profile", method: "GET", cors: true, headers: { "x-selected-rule": "get" }, json: {} },
+      { url: "**/api/profile", method: "POST", cors: true, headers: { "x-selected-rule": "post" }, json: {} },
+    ],
+  }, routeCalls);
+
+  let fulfillment;
+  await handler({
+    request: () => ({
+      method: () => "OPTIONS",
+      url: () => "http://api.test/api/profile",
+      resourceType: () => "fetch",
+      headers: () => ({
+        origin: "http://app.test",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type, x-client",
+      }),
+    }),
+    fulfill: async (options) => { fulfillment = options; },
+  });
+
+  assert.equal(fulfillment.status, 204);
+  assert.equal(fulfillment.headers["access-control-allow-origin"], "http://app.test");
+  assert.equal(fulfillment.headers["access-control-allow-credentials"], "true");
+  assert.equal(fulfillment.headers["access-control-allow-methods"], "POST, OPTIONS");
+  assert.equal(fulfillment.headers["x-selected-rule"], "post");
+  assert.deepEqual(routeCalls, [{
+    method: "OPTIONS",
+    url: "http://api.test/api/profile",
+    action: "cors-preflight",
+    status: 204,
+  }]);
+
+  let wildcardHandler;
+  const wildcardFlow = new FlowRuntime({
+    context: { route: async (_pattern, nextHandler) => { wildcardHandler = nextHandler; } },
+    page: {},
+  });
+  await wildcardFlow.installNetworkRules({
+    routes: [{ url: "**/api/wildcard", cors: true, json: {} }],
+  }, []);
+  let wildcardFulfillment;
+  await wildcardHandler({
+    request: () => ({
+      method: () => "OPTIONS",
+      url: () => "http://api.test/api/wildcard",
+      resourceType: () => "fetch",
+      headers: () => ({
+        origin: "http://app.test",
+        "access-control-request-method": "POST",
+      }),
+    }),
+    fulfill: async (options) => { wildcardFulfillment = options; },
+  });
+  assert.equal(wildcardFulfillment.headers["access-control-allow-methods"], "POST, OPTIONS");
+});
+
 test("MCP entrypoint runs scoped popup, response, frame, goto, and evaluate flow", { timeout: 20_000 }, async () => {
   const client = lineClient("bash", ["scripts/start.sh"], pluginDir);
   try {
@@ -266,6 +364,9 @@ test("JSONL entrypoint runs the same flow", { timeout: 20_000 }, async () => {
     client.write(missingPopupContract("jsonl-missing-popup"));
     const failure = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-missing-popup");
     assertMissingPopupResult(failure);
+    client.write(requestFailureContract("jsonl-network-failure"));
+    const networkFailure = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-network-failure");
+    assertRequestFailureEvidence(networkFailure);
     client.write({ command: "close" });
     await client.waitFor((message) => message.type === "closed");
   } finally {
@@ -290,6 +391,14 @@ test("MCP failure reports step progress and classifies a missing popup as page",
     const reply = await client.waitFor((message) => message.id === 2);
     const result = JSON.parse(reply.result.content[0].text);
     assertMissingPopupResult(result);
+    client.write({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "run", arguments: requestFailureContract("mcp-network-failure") },
+    });
+    const networkReply = await client.waitFor((message) => message.id === 3);
+    assertRequestFailureEvidence(JSON.parse(networkReply.result.content[0].text));
   } finally {
     await client.stop();
   }

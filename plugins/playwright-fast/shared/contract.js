@@ -1,5 +1,6 @@
 const supportedEvidence = new Set(["ultra", "health", "visual", "diag"]);
 const supportedWaitUntil = new Set(["commit", "domcontentloaded", "load", "networkidle"]);
+const diagnosticRequestTypes = new Set(["document", "xhr", "fetch", "eventsource"]);
 const supportedSteps = new Set([
   "setContent", "goto", "click", "fill", "clear", "type", "press", "select", "check",
   "uncheck", "hover", "focus", "wait", "readText", "readAllText", "readAttribute",
@@ -214,12 +215,42 @@ function requestMatchesBody(request, rule) {
 function corsHeaders(request, rule) {
   if (!rule.cors) return rule.headers;
   const requestHeaders = request.headers();
+  const origin = requestHeaders.origin;
+  const allowedMethod = String(rule.method || requestHeaders["access-control-request-method"] || request.method()).toUpperCase();
   return {
-    "access-control-allow-origin": requestHeaders.origin || "*",
+    "access-control-allow-origin": origin || "*",
     "access-control-allow-headers": requestHeaders["access-control-request-headers"] || "Content-Type, Authorization",
-    "access-control-allow-methods": `${rule.method || request.method()}, OPTIONS`,
+    "access-control-allow-methods": `${allowedMethod}, OPTIONS`,
+    ...(origin ? {
+      "access-control-allow-credentials": "true",
+      vary: "Origin",
+    } : {}),
     ...rule.headers,
   };
+}
+
+function recordRequestFailure(requestFailures, request) {
+  const resourceType = request.resourceType();
+  if (!diagnosticRequestTypes.has(resourceType)) return;
+  const rawUrl = request.url();
+  let url;
+  try {
+    const parsedUrl = new URL(rawUrl);
+    parsedUrl.username = "";
+    parsedUrl.password = "";
+    parsedUrl.search = "";
+    parsedUrl.hash = "";
+    url = parsedUrl.toString();
+  } catch {
+    [url] = rawUrl.split(/[?#]/, 1);
+  }
+  requestFailures.push({
+    method: request.method(),
+    url,
+    resourceType,
+    errorText: request.failure()?.errorText || "Request failed",
+  });
+  if (requestFailures.length > 10) requestFailures.shift();
 }
 
 function readStyles(locator, properties) {
@@ -477,14 +508,23 @@ class FlowRuntime {
         return;
       }
       const requestMethod = request.method().toUpperCase();
-      const rule = rules.find((candidate) => candidate.matcher.test(request.url()) && ((candidate.cors && requestMethod === "OPTIONS") || candidate.method === undefined || candidate.method === requestMethod) && (requestMethod === "OPTIONS" || requestMatchesBody(request, candidate)));
+      const requestedMethod = String(request.headers()["access-control-request-method"] || "").toUpperCase();
+      const isPreflight = requestMethod === "OPTIONS" && requestedMethod.length > 0;
+      const rule = rules.find((candidate) => {
+        if (!candidate.matcher.test(request.url())) return false;
+        if (isPreflight) {
+          return candidate.cors && (candidate.method === undefined || candidate.method === requestedMethod);
+        }
+        if (candidate.cors && requestMethod === "OPTIONS") return true;
+        return (candidate.method === undefined || candidate.method === requestMethod) && requestMatchesBody(request, candidate);
+      });
       if (!rule) {
         await route.continue();
         return;
       }
       if (rule.cors && requestMethod === "OPTIONS") {
-        if (contract.captureRouteCalls) routeCalls.push({ method: request.method(), url: request.url(), action: "cors-preflight" });
         await route.fulfill({ status: 204, headers: corsHeaders(request, rule), body: "" });
+        if (contract.captureRouteCalls) routeCalls.push({ method: request.method(), url: request.url(), action: "cors-preflight", status: 204 });
         return;
       }
       if (rule.abort !== undefined) {
@@ -494,13 +534,14 @@ class FlowRuntime {
       }
       const isJson = Object.prototype.hasOwnProperty.call(rule, "json");
       const body = isJson ? JSON.stringify(rule.json) : String(rule.body);
-      if (contract.captureRouteCalls) routeCalls.push({ method: request.method(), url: request.url(), action: "fulfill" });
+      const status = rule.status ?? 200;
       await route.fulfill({
-        status: rule.status ?? 200,
+        status,
         headers: corsHeaders(request, rule),
         contentType: rule.contentType || (isJson ? "application/json" : undefined),
         body,
       });
+      if (contract.captureRouteCalls) routeCalls.push({ method: request.method(), url: request.url(), action: "fulfill", status });
     };
     await this.context.route("**/*", handler);
     return handler;
@@ -781,5 +822,6 @@ module.exports = {
   classifyFailure,
   compactError,
   contractSchema,
+  recordRequestFailure,
   validateContract,
 };

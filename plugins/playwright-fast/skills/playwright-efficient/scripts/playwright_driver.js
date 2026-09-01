@@ -4,6 +4,7 @@ const {
   FlowRuntime,
   classifyFailure,
   compactError,
+  recordRequestFailure,
   validateContract,
 } = require("../../../shared/contract");
 
@@ -15,6 +16,7 @@ let page;
 let closing = false;
 let consoleErrors = [];
 let pageErrors = [];
+let requestFailures = [];
 let defaultTimeoutMs = 2000;
 let defaultNavigationTimeoutMs = 5000;
 const attachedPages = new WeakSet();
@@ -41,6 +43,7 @@ function attachPage(nextPage) {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   nextPage.on("pageerror", (error) => pageErrors.push(error.message));
+  nextPage.on("requestfailed", (request) => recordRequestFailure(requestFailures, request));
 }
 
 function adoptPage(nextPage) {
@@ -77,6 +80,7 @@ async function runContract(contract) {
 
   consoleErrors = [];
   pageErrors = [];
+  requestFailures = [];
 
   try {
     validateContract(contract);
@@ -157,6 +161,7 @@ async function runContract(contract) {
       observations,
       ...(screenshotPath ? { screenshot: screenshotPath } : {}),
       ...(evidence === "health" || evidence === "diag" ? { consoleErrors, pageErrors } : {}),
+      ...((evidence === "health" || evidence === "diag") && requestFailures.length > 0 ? { requestFailures } : {}),
       ...(contract.captureRouteCalls ? { routeCalls } : {}),
     });
   } catch (error) {
@@ -179,8 +184,11 @@ async function runContract(contract) {
       url: page?.url(),
       error: compactError(error),
       ...(stepResults.length > 0 ? { stepResults } : {}),
+      ...(Object.keys(outputs).length > 0 ? { outputs } : {}),
+      ...(observations.length > 0 ? { observations } : {}),
       ...(screenshotPath ? { screenshot: screenshotPath } : {}),
       ...(evidence === "health" || evidence === "diag" ? { consoleErrors, pageErrors } : {}),
+      ...(requestFailures.length > 0 ? { requestFailures } : {}),
       ...(contract?.captureRouteCalls ? { routeCalls } : {}),
     });
   } finally {

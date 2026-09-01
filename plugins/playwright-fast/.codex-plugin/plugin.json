@@ -1,6 +1,6 @@
 {
   "name": "playwright-fast",
-  "version": "0.1.0+codex.20260830043828",
+  "version": "0.1.0+codex.20260901101401",
   "description": "Persistent, contract-driven Playwright automation for low-latency Codex browser work.",
   "author": {
     "name": "JCB"
@@ -8,7 +8,7 @@
   "interface": {
     "displayName": "Playwright Fast",
     "shortDescription": "Run browser flows through a persistent Chromium runtime.",
-    "longDescription": "Exposes run, reset, and status tools backed by one reusable Playwright browser, with scoped and framed locators, popup adoption, response capture, request-aware mocks, storage fixtures, and a 30-minute idle TTL.",
+    "longDescription": "Exposes run, reset, and status tools backed by one reusable Playwright browser, with scoped and framed locators, popup adoption, response capture, credential-aware CORS mocks, request-failure diagnostics, storage fixtures, and a 30-minute idle TTL.",
     "developerName": "JCB",
     "category": "Developer",
     "capabilities": [

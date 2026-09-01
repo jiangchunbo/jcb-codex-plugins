@@ -4,6 +4,7 @@ const {
   classifyFailure,
   compactError,
   contractSchema,
+  recordRequestFailure,
   validateContract,
 } = require("../shared/contract");
 
@@ -33,6 +34,7 @@ class PersistentRuntime {
     this.runs = 0;
     this.consoleErrors = [];
     this.pageErrors = [];
+    this.requestFailures = [];
     this.attachedPages = new WeakSet();
     this.defaultTimeoutMs = 2000;
     this.defaultNavigationTimeoutMs = 5000;
@@ -62,6 +64,7 @@ class PersistentRuntime {
       if (message.type() === "error") this.consoleErrors.push(message.text());
     });
     page.on("pageerror", (error) => this.pageErrors.push(error.message));
+    page.on("requestfailed", (request) => recordRequestFailure(this.requestFailures, request));
   }
 
   adoptPage(page) {
@@ -151,6 +154,7 @@ class PersistentRuntime {
     let coldStarted = false;
     this.consoleErrors = [];
     this.pageErrors = [];
+    this.requestFailures = [];
 
     try {
       validateContract(contract);
@@ -239,6 +243,7 @@ class PersistentRuntime {
           observations,
           ...(healthFailure ? { failureKind: "page" } : {}),
           ...(evidence === "health" || evidence === "diag" ? { consoleErrors: this.consoleErrors, pageErrors: this.pageErrors } : {}),
+          ...((evidence === "health" || evidence === "diag") && this.requestFailures.length > 0 ? { requestFailures: this.requestFailures } : {}),
           ...(image ? { screenshotBytes: image.length } : {}),
           ...(contract.captureRouteCalls ? { routeCalls } : {}),
         },
@@ -263,7 +268,10 @@ class PersistentRuntime {
           url: this.page?.url() || null,
           error: compactError(error),
           ...(stepResults.length > 0 ? { stepResults } : {}),
+          ...(Object.keys(outputs).length > 0 ? { outputs } : {}),
+          ...(observations.length > 0 ? { observations } : {}),
           ...(evidence === "health" || evidence === "diag" ? { consoleErrors: this.consoleErrors, pageErrors: this.pageErrors } : {}),
+          ...(this.requestFailures.length > 0 ? { requestFailures: this.requestFailures } : {}),
           ...(image ? { screenshotBytes: image.length } : {}),
           ...(contract?.captureRouteCalls ? { routeCalls } : {}),
         },

@@ -87,7 +87,9 @@ Use declarative `cookies`, origin-scoped `localStorage`, and first-match `routes
 {"id":"modal","url":"http://127.0.0.1:3000/modal","localStorage":[{"origin":"http://127.0.0.1:3000","name":"qa-session","value":"true"}],"routes":[{"url":"**/api/modal","method":"POST","requestBody":{"kind":"detail"},"cors":true,"json":{"code":200,"data":[]}}],"steps":[{"op":"click","target":{"role":"button","name":"Open"},"timeoutMs":3000}],"expect":[{"target":{"role":"dialog"},"state":"visible"}],"evidence":"visual"}
 ```
 
-Route rules accept `url` glob, optional `method`, partial-JSON `requestBody` or string `requestBodyIncludes`, and one of `json`, `body`, or `abort`. Set `cors:true` to fulfill matching OPTIONS preflights and add response CORS headers. Optional `status`, `headers`, and `contentType` customize fulfillment. Set `captureRouteCalls:true` only when matched-request evidence is needed.
+Route rules accept `url` glob, optional `method`, partial-JSON `requestBody` or string `requestBodyIncludes`, and one of `json`, `body`, or `abort`. Set `cors:true` to add credential-compatible response headers and fulfill matching OPTIONS requests surfaced by Playwright. Claim that a preflight occurred only when `captureRouteCalls:true` returns `action:"cors-preflight"`. Optional `status`, `headers`, and `contentType` customize fulfillment.
+
+For an optional EventSource/SSE dependency that is outside the tested flow, prefer a `204` mock with an empty `body`; a finite `200 text/event-stream` body closes immediately and can trigger reconnect loops that contaminate later observations.
 
 Use `captureResponses` when the result comes from a real network response. Listeners are installed before navigation and steps; each rule uses a URL glob, optional method, `json` or `text` body, and an `as` output key:
 
@@ -133,7 +135,9 @@ Do not add a second viewport, screenshot, retry, trace, accessibility sweep, net
 
 ## Escalate Once
 
-Use `failureKind` from the driver result. Correct `contract` failures and rerun the same minimal contract; they do not consume the application diagnostic allowance. On a valid-contract `locator`, `assertion`, `navigation`, `page`, or `runtime` failure, preserve the browser and current page, then run one targeted `diag` contract against that state. Do not restart the browser, rediscover the whole page, or rerun the full suite unless the failure invalidated runtime state.
+Use `failureKind` from the driver result. Correct `contract` failures and rerun the same minimal contract; they do not consume the application diagnostic allowance. A locator wait accompanied by a failed document, XHR, or fetch remains `locator` and includes compact `requestFailures`; treat those failures as candidate causes until the application data flow proves they feed the target. On another valid-contract `locator`, `assertion`, `navigation`, `page`, or `runtime` failure, preserve the browser and current page, then run one targeted `diag` contract against that state. Do not restart the browser, rediscover the whole page, or rerun the full suite unless the failure invalidated runtime state. When a reset is necessary and another run follows immediately, put `reset:true` on that next contract instead of calling `reset` separately.
+
+Top-level `ready` runs after top-level navigation and before `steps`. If a `setContent` or `goto` step creates the ready target, follow that step with `wait`. `health` fails on console or page errors; returned `requestFailures` are diagnostic evidence and do not fail an otherwise successful health flow.
 
 ## Fall Back To CLI
 
