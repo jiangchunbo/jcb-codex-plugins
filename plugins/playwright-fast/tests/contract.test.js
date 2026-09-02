@@ -1,10 +1,18 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const readline = require("node:readline");
 const { spawn } = require("node:child_process");
 const { after, before, test } = require("node:test");
-const { FlowRuntime, contractSchema, validateContract } = require("../shared/contract");
+const {
+  DEFAULT_VIEWPORT,
+  FlowRuntime,
+  MAX_CONTRACT_BUDGET_MS,
+  MAX_OPERATION_TIMEOUT_MS,
+  contractSchema,
+  validateContract,
+} = require("../shared/contract");
 
 const pluginDir = path.resolve(__dirname, "..");
 const credentialedMockUrl = "http://127.0.0.1:1/api/credentialed";
@@ -185,6 +193,17 @@ function requestFailureContract(id) {
   };
 }
 
+function viewportContract(id, viewport) {
+  return {
+    id,
+    ...(viewport ? { viewport } : {}),
+    steps: [
+      { op: "setContent", html: "<!doctype html><main>Viewport probe</main>" },
+      { op: "evaluate", expression: "({ width: innerWidth, height: innerHeight })", as: "viewport" },
+    ],
+  };
+}
+
 function assertRequestFailureEvidence(result) {
   assert.equal(result.ok, false);
   assert.equal(result.failureKind, "locator");
@@ -237,14 +256,32 @@ function lineClient(command, args, cwd) {
   return { child, waitFor, write, stop };
 }
 
+test("bundles one MCP-first Playwright skill with on-demand fallbacks", () => {
+  const skillsDir = path.join(pluginDir, "skills");
+  const skillDir = path.join(skillsDir, "playwright");
+  const skill = fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf8");
+  const fallbacks = fs.readFileSync(path.join(skillDir, "references", "fallbacks.md"), "utf8");
+
+  assert.equal(fs.existsSync(path.join(skillsDir, "playwright-efficient")), false);
+  assert.match(skill, /Call the `run` tool from the `playwright-fast` MCP directly/);
+  assert.match(skill, /\[references\/fallbacks\.md\]\(references\/fallbacks\.md\)/);
+  assert.doesNotMatch(skill, /playwright-efficient/);
+  assert.match(fallbacks, /PLAYWRIGHT_SKILL_DIR/);
+  assert.equal(fs.existsSync(path.join(skillDir, "scripts", "playwright_driver.sh")), true);
+});
+
 test("schema exposes scoped targets and validates new operations", () => {
   assert.equal(contractSchema.$defs.target.properties.within.$ref, "#/$defs/target");
   assert.equal(contractSchema.$defs.target.properties.frame.$ref, "#/$defs/frame");
   assert.equal(contractSchema.$defs.target.properties.hasText.oneOf.length, 2);
   assert.equal(contractSchema.$defs.target.oneOf.length, 6);
   assert.equal(contractSchema.$defs.frame.oneOf.length, 3);
-  assert.equal(contractSchema.$defs.step.oneOf.length, 9);
+  assert.equal(contractSchema.$defs.step.oneOf.length, 10);
   assert.equal(contractSchema.$defs.expectation.oneOf.length, 5);
+  assert.equal(contractSchema.properties.routes.items.$ref, "#/$defs/route");
+  assert.equal(contractSchema.$defs.route.additionalProperties, false);
+  assert.equal(contractSchema.$defs.target.properties.name.type, "string");
+  assert.equal(contractSchema.$defs.step.properties.timeoutMs.maximum, MAX_OPERATION_TIMEOUT_MS);
   assert(contractSchema.$defs.step.properties.popup.enum.includes("switch"));
   assert(contractSchema.$defs.step.properties.op.enum.includes("goto"));
   assert(contractSchema.$defs.step.properties.op.enum.includes("evaluate"));
@@ -261,6 +298,26 @@ test("schema exposes scoped targets and validates new operations", () => {
     /popup is only supported for click/,
   );
   assert.throws(
+    () => validateContract({ steps: [{ op: "fill", target: { css: "input" } }] }),
+    /value must be a string for fill/,
+  );
+  assert.throws(
+    () => validateContract({ steps: [{ op: "type", target: { css: "input" } }] }),
+    /value must be a string for type/,
+  );
+  assert.throws(
+    () => validateContract({ steps: [{ op: "press", target: { css: "input" } }] }),
+    /key must be a non-empty string/,
+  );
+  assert.throws(
+    () => validateContract({ steps: [{ op: "select", target: { css: "select" } }] }),
+    /value is required for select/,
+  );
+  assert.throws(
+    () => validateContract({ steps: [{ op: "click", target: { role: "button", name: false } }] }),
+    /name must be a non-empty string/,
+  );
+  assert.throws(
     () => validateContract({ steps: [{ op: "evaluate", expression: "document.title", waitUntil: "load" }] }),
     /waitUntil requires/,
   );
@@ -272,6 +329,51 @@ test("schema exposes scoped targets and validates new operations", () => {
     () => validateContract({ steps: [{ op: "click", target: { css: "button", hasText: [] } }] }),
     /hasText must be a non-empty string or string array/,
   );
+  assert.throws(
+    () => validateContract({ steps: [{ op: "wait", ms: MAX_OPERATION_TIMEOUT_MS + 1 }] }),
+    /must not exceed/,
+  );
+  assert.throws(
+    () => validateContract({ steps: Array.from({ length: 5 }, () => ({ op: "wait", ms: MAX_OPERATION_TIMEOUT_MS })) }),
+    new RegExp(`exceeds ${MAX_CONTRACT_BUDGET_MS}ms`),
+  );
+  assert.throws(
+    () => validateContract({ steps: [{ op: "readAllText", target: { css: "li" }, timeoutMs: 10 }] }),
+    /timeoutMs is not supported for readAllText/,
+  );
+  assert.throws(
+    () => validateContract({ routes: [{ url: "**/api", json: {}, body: "duplicate" }] }),
+    /exactly one of json, body, or abort/,
+  );
+});
+
+test("read operations pass supported per-step timeouts to Playwright", async () => {
+  const calls = [];
+  const locator = {
+    textContent: async (options) => { calls.push(["textContent", options]); return "text"; },
+    getAttribute: async (name, options) => { calls.push(["getAttribute", name, options]); return "value"; },
+    boundingBox: async (options) => { calls.push(["boundingBox", options]); return { x: 0, y: 0, width: 1, height: 1 }; },
+    evaluate: async (_callback, properties, options) => { calls.push(["evaluate", properties, options]); return { color: "red" }; },
+  };
+  const flow = new FlowRuntime({ context: {}, page: { locator: () => locator } });
+  const outputs = {};
+
+  await flow.runStep({ op: "readText", target: { css: "main" }, timeoutMs: 75 }, outputs);
+  await flow.runStep({ op: "readAttribute", target: { css: "main" }, attribute: "data-id", timeoutMs: 80 }, outputs);
+  await flow.runStep({ op: "readBoundingBox", target: { css: "main" }, timeoutMs: 85 }, outputs);
+  await flow.runStep({ op: "readComputedStyle", target: { css: "main" }, properties: ["color"], timeoutMs: 90 }, outputs);
+
+  assert.deepEqual(calls, [
+    ["textContent", { timeout: 75 }],
+    ["getAttribute", "data-id", { timeout: 80 }],
+    ["boundingBox", { timeout: 85 }],
+    ["evaluate", ["color"], { timeout: 90 }],
+  ]);
+});
+
+test("MCP host timeout leaves margin above the bounded contract budget", () => {
+  const config = JSON.parse(fs.readFileSync(path.join(pluginDir, ".mcp.json"), "utf8"));
+  assert(config.mcpServers["playwright-fast"].tool_timeout_sec * 1000 > MAX_CONTRACT_BUDGET_MS);
 });
 
 test("route glob makes query requirements explicit", async () => {
@@ -379,25 +481,40 @@ test("MCP entrypoint runs scoped popup, response, frame, goto, and evaluate flow
   const client = lineClient("bash", ["scripts/start.sh"], pluginDir);
   try {
     client.write({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
-    await client.waitFor((message) => message.id === 1);
+    const initialized = await client.waitFor((message) => message.id === 1);
+    const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, ".codex-plugin", "plugin.json"), "utf8"));
+    assert.equal(initialized.result.serverInfo.version, manifest.version);
     client.write({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     const listed = await client.waitFor((message) => message.id === 2);
     const runTool = listed.result.tools.find((tool) => tool.name === "run");
     assert.equal(runTool.inputSchema.$defs.target.properties.within.$ref, "#/$defs/target");
     assert.equal(runTool.inputSchema.$defs.target.oneOf.length, 6);
-    assert.equal(runTool.inputSchema.$defs.step.oneOf.length, 9);
+    assert.equal(runTool.inputSchema.$defs.step.oneOf.length, 10);
+    assert.equal(runTool.inputSchema.properties.routes.items.$ref, "#/$defs/route");
     client.write({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "run", arguments: flowContract("mcp") } });
     const reply = await client.waitFor((message) => message.id === 3);
     assert.equal(reply.result.isError, false, JSON.stringify(reply));
     assertFlowResult(JSON.parse(reply.result.content[0].text));
+    client.write({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "run", arguments: viewportContract("mcp-mobile", { width: 375, height: 667 }) } });
+    const mobile = JSON.parse((await client.waitFor((message) => message.id === 4)).result.content[0].text);
+    assert.deepEqual(mobile.viewport, { width: 375, height: 667 });
+    client.write({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "run", arguments: viewportContract("mcp-default") } });
+    const desktop = JSON.parse((await client.waitFor((message) => message.id === 5)).result.content[0].text);
+    assert.deepEqual(desktop.viewport, DEFAULT_VIEWPORT);
+    assert.deepEqual(desktop.outputs.viewport, DEFAULT_VIEWPORT);
+    client.write({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "status", arguments: {} } });
+    const status = JSON.parse((await client.waitFor((message) => message.id === 6)).result.content[0].text);
+    assert.equal(status.version, manifest.version);
+    assert.deepEqual(status.viewport, DEFAULT_VIEWPORT);
   } finally {
     await client.stop();
   }
 });
 
 test("JSONL entrypoint runs the same flow", { timeout: 20_000 }, async () => {
-  const script = "skills/playwright-efficient/scripts/playwright_driver.sh";
+  const script = "skills/playwright/scripts/playwright_driver.sh";
   const client = lineClient("bash", [script], pluginDir);
+  const screenshotPaths = [];
   try {
     await client.waitFor((message) => message.type === "ready");
     client.write(flowContract("jsonl"));
@@ -409,10 +526,32 @@ test("JSONL entrypoint runs the same flow", { timeout: 20_000 }, async () => {
     client.write(requestFailureContract("jsonl-network-failure"));
     const networkFailure = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-network-failure");
     assertRequestFailureEvidence(networkFailure);
+    client.write(viewportContract("jsonl-mobile", { width: 390, height: 844 }));
+    const mobile = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-mobile");
+    assert.deepEqual(mobile.viewport, { width: 390, height: 844 });
+    client.write(viewportContract("jsonl-default"));
+    const desktop = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-default");
+    assert.deepEqual(desktop.viewport, DEFAULT_VIEWPORT);
+    assert.deepEqual(desktop.outputs.viewport, DEFAULT_VIEWPORT);
+    client.write({ id: "evaluate-timeout", steps: [{ op: "evaluate", expression: "new Promise(() => {})", timeoutMs: 50 }] });
+    const evaluateTimeout = await client.waitFor((message) => message.type === "result" && message.id === "evaluate-timeout");
+    assert.equal(evaluateTimeout.failureKind, "runtime");
+    assert.match(evaluateTimeout.error, /Evaluation timed out after 50ms/);
+    client.write({ id: "repeat-shot", steps: [{ op: "setContent", html: "<main>one</main>" }], evidence: "visual" });
+    const firstShot = await client.waitFor((message) => message.type === "result" && message.id === "repeat-shot" && message.screenshot);
+    screenshotPaths.push(firstShot.screenshot);
+    client.write({ id: "repeat-shot", steps: [{ op: "setContent", html: "<main>two</main>" }], evidence: "visual" });
+    const secondShot = await client.waitFor((message) => message.type === "result" && message.id === "repeat-shot" && message.screenshot && message.screenshot !== firstShot.screenshot, 5000);
+    screenshotPaths.push(secondShot.screenshot);
+    assert.notEqual(firstShot.screenshot, secondShot.screenshot);
+    assert(screenshotPaths.every((screenshotPath) => fs.existsSync(screenshotPath)));
     client.write({ command: "close" });
     await client.waitFor((message) => message.type === "closed");
   } finally {
     await client.stop();
+    for (const screenshotPath of screenshotPaths) fs.rmSync(screenshotPath, { force: true });
+    const artifactDirs = [...new Set(screenshotPaths.map((screenshotPath) => path.dirname(screenshotPath)))];
+    for (const artifactDir of artifactDirs) fs.rmdirSync(artifactDir);
   }
 });
 

@@ -26,8 +26,7 @@ Clone this repository and run:
 Then start a new Codex task. The installation provides:
 
 - `playwright-fast`: persistent Playwright MCP with scoped locators, popup and frame flows, response capture, credential-aware CORS mocks, request-failure diagnostics, storage fixtures, and compact evidence
-- `playwright`: real-browser workflow and CLI fallback
-- `playwright-efficient`: persistent JSONL driver and speed-first evidence policy
+- `playwright`: MCP-first real-browser workflow with on-demand JSONL, repository-runner, REPL, and CLI fallbacks
 - standalone JCB skills from `skills/*`, linked into `~/.codex/skills` when the destination is absent or already a symlink
 
 ## Update

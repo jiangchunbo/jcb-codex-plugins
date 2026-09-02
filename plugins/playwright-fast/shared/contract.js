@@ -1,6 +1,11 @@
 const supportedEvidence = new Set(["ultra", "health", "visual", "diag"]);
 const supportedWaitUntil = new Set(["commit", "domcontentloaded", "load", "networkidle"]);
 const diagnosticRequestTypes = new Set(["document", "xhr", "fetch", "eventsource"]);
+const DEFAULT_TIMEOUT_MS = 2000;
+const DEFAULT_NAVIGATION_TIMEOUT_MS = 5000;
+const DEFAULT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
+const MAX_OPERATION_TIMEOUT_MS = 10_000;
+const MAX_CONTRACT_BUDGET_MS = 45_000;
 const supportedSteps = new Set([
   "setContent", "goto", "click", "fill", "clear", "type", "press", "select", "check",
   "uncheck", "hover", "focus", "wait", "readText", "readAllText", "readAttribute",
@@ -41,6 +46,12 @@ function compactError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function assertBoundedTimeout(value, label, { allowZero = false } = {}) {
+  const minimum = allowZero ? 0 : 1;
+  assertContract(Number.isInteger(value) && value >= minimum, `${label} must be ${allowZero ? "a non-negative" : "a positive"} integer`);
+  assertContract(value <= MAX_OPERATION_TIMEOUT_MS, `${label} must not exceed ${MAX_OPERATION_TIMEOUT_MS}ms`);
+}
+
 function validateFrame(frame, label) {
   assertContract(frame && typeof frame === "object" && !Array.isArray(frame), `${label} must be an object`);
   const selectors = ["name", "urlIncludes", "css"].filter((key) => frame[key] !== undefined);
@@ -52,6 +63,12 @@ function validateTarget(target, label) {
   assertContract(target && typeof target === "object" && !Array.isArray(target), `${label} target is required`);
   const selectors = selectorKeys.filter((key) => target[key] !== undefined);
   assertContract(selectors.length === 1, `${label} target must define exactly one selector`);
+  const selector = selectors[0];
+  assertContract(typeof target[selector] === "string" && target[selector].length > 0, `${label}.${selector} must be a non-empty string`);
+  if (target.name !== undefined) {
+    assertContract(target.role !== undefined, `${label}.name requires a role selector`);
+    assertContract(typeof target.name === "string" && target.name.length > 0, `${label}.name must be a non-empty string`);
+  }
   if (target.within !== undefined) validateTarget(target.within, `${label}.within`);
   if (target.frame !== undefined) validateFrame(target.frame, `${label}.frame`);
   if (target.hasText !== undefined) {
@@ -81,13 +98,46 @@ function validateExpectation(expectation, label) {
   }
 }
 
+function expectationBudgetMs(expectation, defaultTimeoutMs) {
+  if (["url", "urlIncludes"].some((key) => expectation[key] !== undefined)) return 0;
+  if (["title", "titleIncludes"].some((key) => expectation[key] !== undefined)) return defaultTimeoutMs;
+  const checks = ["state", "text", "contains", "value", "count", "attribute", "computedStyle", "box"]
+    .filter((key) => expectation[key] !== undefined).length;
+  return Math.max(1, checks) * defaultTimeoutMs;
+}
+
+function estimateContractBudgetMs(contract) {
+  const defaultTimeoutMs = contract.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const navigationTimeoutMs = contract.navigationTimeoutMs || DEFAULT_NAVIGATION_TIMEOUT_MS;
+  let budgetMs = contract.url ? navigationTimeoutMs : 0;
+  if (contract.ready) budgetMs += expectationBudgetMs(contract.ready, defaultTimeoutMs);
+  for (const step of contract.steps || []) {
+    if (step.op === "wait" && step.ms !== undefined) {
+      budgetMs += step.ms;
+    } else if (step.op === "goto" || step.op === "setContent") {
+      budgetMs += step.timeoutMs || navigationTimeoutMs;
+    } else if (step.op === "click" && step.popup === "switch") {
+      budgetMs += step.timeoutMs ? 3 * step.timeoutMs : 2 * defaultTimeoutMs + navigationTimeoutMs;
+    } else {
+      budgetMs += step.timeoutMs || defaultTimeoutMs;
+    }
+  }
+  for (const expectation of contract.expect || []) {
+    budgetMs += expectationBudgetMs(expectation, defaultTimeoutMs);
+  }
+  for (const capture of contract.captureResponses || []) {
+    if (capture.required !== false) budgetMs += capture.timeoutMs || defaultTimeoutMs;
+  }
+  return budgetMs;
+}
+
 function validateContract(contract) {
   assertContract(contract && typeof contract === "object" && !Array.isArray(contract), "Contract must be an object");
   assertContract(supportedEvidence.has(contract.evidence || "ultra"), "Unsupported evidence tier");
   if (contract.url !== undefined) assertContract(typeof contract.url === "string" && contract.url.length > 0, "url must be a non-empty string");
   if (contract.waitUntil !== undefined) assertContract(supportedWaitUntil.has(contract.waitUntil), "Unsupported waitUntil value");
   for (const key of ["timeoutMs", "navigationTimeoutMs"]) {
-    if (contract[key] !== undefined) assertContract(Number.isInteger(contract[key]) && contract[key] > 0, `${key} must be a positive integer`);
+    if (contract[key] !== undefined) assertBoundedTimeout(contract[key], key);
   }
   if (contract.viewport !== undefined) {
     assertContract(Number.isInteger(contract.viewport.width) && contract.viewport.width > 0 && Number.isInteger(contract.viewport.height) && contract.viewport.height > 0, "viewport requires positive integer width and height");
@@ -113,9 +163,17 @@ function validateContract(contract) {
       const actions = ["json", "body", "abort"].filter((key) => route[key] !== undefined);
       assertContract(actions.length === 1, `routes[${index}] must define exactly one of json, body, or abort`);
       if (route.method !== undefined) assertContract(typeof route.method === "string" && route.method.length > 0, `routes[${index}].method must be a string`);
-      if (route.requestBody !== undefined) assertContract(route.requestBody && typeof route.requestBody === "object", `routes[${index}].requestBody must be an object`);
+      if (route.requestBody !== undefined) assertContract(route.requestBody && typeof route.requestBody === "object", `routes[${index}].requestBody must be an object or array`);
       if (route.requestBodyIncludes !== undefined) assertContract(typeof route.requestBodyIncludes === "string", `routes[${index}].requestBodyIncludes must be a string`);
       if (route.cors !== undefined) assertContract(typeof route.cors === "boolean", `routes[${index}].cors must be a boolean`);
+      if (route.body !== undefined) assertContract(typeof route.body === "string", `routes[${index}].body must be a string`);
+      if (route.abort !== undefined) assertContract(route.abort === true || (typeof route.abort === "string" && route.abort.length > 0), `routes[${index}].abort must be true or a non-empty error code`);
+      if (route.status !== undefined) assertContract(Number.isInteger(route.status) && route.status >= 100 && route.status <= 599, `routes[${index}].status must be an HTTP status code`);
+      if (route.headers !== undefined) {
+        assertContract(route.headers && typeof route.headers === "object" && !Array.isArray(route.headers), `routes[${index}].headers must be an object`);
+        assertContract(Object.values(route.headers).every((value) => typeof value === "string"), `routes[${index}].headers values must be strings`);
+      }
+      if (route.contentType !== undefined) assertContract(typeof route.contentType === "string" && route.contentType.length > 0, `routes[${index}].contentType must be a non-empty string`);
     });
   }
   if (contract.captureResponses !== undefined) {
@@ -133,6 +191,7 @@ function validateContract(contract) {
       for (const key of ["count", "maxBodyBytes", "timeoutMs"]) {
         if (capture[key] !== undefined) assertContract(Number.isInteger(capture[key]) && capture[key] > 0, `${label}.${key} must be a positive integer`);
       }
+      if (capture.timeoutMs !== undefined) assertBoundedTimeout(capture.timeoutMs, `${label}.timeoutMs`);
       if (capture.required !== undefined) assertContract(typeof capture.required === "boolean", `${label}.required must be a boolean`);
     });
   }
@@ -142,7 +201,7 @@ function validateContract(contract) {
     const label = `steps[${index}]`;
     assertContract(step && typeof step === "object", `${label} must be an object`);
     assertContract(supportedSteps.has(step.op), `${label} has unsupported operation: ${step.op}`);
-    if (step.timeoutMs !== undefined) assertContract(Number.isInteger(step.timeoutMs) && step.timeoutMs > 0, `${label}.timeoutMs must be a positive integer`);
+    if (step.timeoutMs !== undefined) assertBoundedTimeout(step.timeoutMs, `${label}.timeoutMs`);
     if (step.waitUntil !== undefined) assertContract(supportedWaitUntil.has(step.waitUntil), `${label}.waitUntil is unsupported`);
     if (step.popup !== undefined) {
       assertContract(step.op === "click", `${label}.popup is only supported for click`);
@@ -153,6 +212,9 @@ function validateContract(contract) {
       assertContract(supportsWaitUntil, `${label}.waitUntil requires setContent, goto, or a popup click`);
     }
     if (step.frame !== undefined) assertContract(step.op === "evaluate", `${label}.frame is only supported directly on evaluate; other steps use target.frame`);
+    if (step.as !== undefined) assertContract(typeof step.as === "string" && step.as.length > 0, `${label}.as must be a non-empty string`);
+    if (step.delay !== undefined) assertContract(typeof step.delay === "number" && Number.isFinite(step.delay) && step.delay >= 0, `${label}.delay must be a non-negative number`);
+    if (step.state !== undefined) assertContract(["attached", "detached", "visible", "hidden"].includes(step.state), `${label}.state is unsupported`);
     if (step.op === "setContent") {
       assertContract(typeof step.html === "string", `${label}.html must be a string`);
       return;
@@ -164,21 +226,26 @@ function validateContract(contract) {
     if (step.op === "evaluate") {
       assertContract(typeof step.expression === "string" && step.expression.length > 0, `${label}.expression is required`);
       if (step.frame !== undefined) validateFrame(step.frame, `${label}.frame`);
-      if (step.as !== undefined) assertContract(typeof step.as === "string" && step.as.length > 0, `${label}.as must be a non-empty string`);
       return;
     }
     if (step.op === "wait" && step.ms !== undefined) {
-      assertContract(Number.isInteger(step.ms) && step.ms >= 0, `${label}.ms must be a non-negative integer`);
+      assertBoundedTimeout(step.ms, `${label}.ms`, { allowZero: true });
       assertContract(step.target === undefined, `${label} cannot define both ms and target`);
       return;
     }
     validateTarget(step.target, label);
+    if (step.op === "fill" || step.op === "type") assertContract(typeof step.value === "string", `${label}.value must be a string for ${step.op}`);
+    if (step.op === "press") assertContract(typeof step.key === "string" && step.key.length > 0, `${label}.key must be a non-empty string`);
+    if (step.op === "select") assertContract(step.value !== undefined, `${label}.value is required for select`);
+    if (step.op === "readAllText" && step.timeoutMs !== undefined) assertContract(false, `${label}.timeoutMs is not supported for readAllText because it does not wait for a locator`);
     if (step.op === "readAttribute") assertContract(typeof step.attribute === "string" && step.attribute.length > 0, `${label}.attribute must be a non-empty string`);
     if (step.op === "readComputedStyle") assertContract(Array.isArray(step.properties) && step.properties.length > 0 && step.properties.every((property) => typeof property === "string" && property.length > 0), `${label}.properties must be a non-empty string array`);
   });
   if (contract.ready !== undefined) validateExpectation(contract.ready, "ready");
   assertContract(contract.expect === undefined || Array.isArray(contract.expect), "expect must be an array");
   (contract.expect || []).forEach((expectation, index) => validateExpectation(expectation, `expect[${index}]`));
+  const budgetMs = estimateContractBudgetMs(contract);
+  assertContract(budgetMs <= MAX_CONTRACT_BUDGET_MS, `Estimated contract budget ${budgetMs}ms exceeds ${MAX_CONTRACT_BUDGET_MS}ms; split the flow or lower explicit waits/timeouts`);
 }
 
 function globToRegExp(pattern) {
@@ -253,11 +320,11 @@ function recordRequestFailure(requestFailures, request) {
   if (requestFailures.length > 10) requestFailures.shift();
 }
 
-function readStyles(locator, properties) {
+function readStyles(locator, properties, options) {
   return locator.evaluate((element, names) => {
     const style = getComputedStyle(element);
     return Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name) || style[name] || ""]));
-  }, properties);
+  }, properties, options);
 }
 
 function withBoxEdges(box) {
@@ -298,7 +365,7 @@ function frameFromNameOrUrl(page, spec) {
 }
 
 class FlowRuntime {
-  constructor({ context, page, onPage, defaultTimeoutMs = 2000 }) {
+  constructor({ context, page, onPage, defaultTimeoutMs = DEFAULT_TIMEOUT_MS }) {
     this.context = context;
     this.page = page;
     this.onPage = onPage;
@@ -361,7 +428,7 @@ class FlowRuntime {
 
   async runStep(step, outputs) {
     if (step.op === "setContent") {
-      await this.page.setContent(step.html, { waitUntil: step.waitUntil || "domcontentloaded" });
+      await this.page.setContent(step.html, { waitUntil: step.waitUntil || "domcontentloaded", ...(step.timeoutMs ? { timeout: step.timeoutMs } : {}) });
       return;
     }
     if (step.op === "goto") {
@@ -370,12 +437,18 @@ class FlowRuntime {
     }
     if (step.op === "evaluate") {
       const target = await this.resolveEvaluationTarget(step.frame);
+      const timeoutMs = step.timeoutMs || this.defaultTimeoutMs;
       const value = await target.evaluate(
-        ({ expression, arg }) => {
+        ({ expression, arg, timeoutMs: evaluationTimeoutMs }) => {
           const evaluated = eval(expression);
-          return typeof evaluated === "function" ? evaluated(arg) : evaluated;
+          const result = typeof evaluated === "function" ? evaluated(arg) : evaluated;
+          if (!result || typeof result.then !== "function") return result;
+          return Promise.race([
+            result,
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`Evaluation timed out after ${evaluationTimeoutMs}ms`)), evaluationTimeoutMs)),
+          ]);
         },
-        { expression: step.expression, arg: step.arg },
+        { expression: step.expression, arg: step.arg, timeoutMs },
       );
       outputs[step.as || "evaluation"] = value;
       return;
@@ -404,9 +477,9 @@ class FlowRuntime {
           await popup.waitForLoadState(step.waitUntil || "domcontentloaded", actionOptions);
         } else await locator.click(actionOptions);
         break;
-      case "fill": await locator.fill(step.value ?? "", actionOptions); break;
+      case "fill": await locator.fill(step.value, actionOptions); break;
       case "clear": await locator.clear(actionOptions); break;
-      case "type": await locator.pressSequentially(step.value ?? "", { delay: step.delay || 0, ...actionOptions }); break;
+      case "type": await locator.pressSequentially(step.value, { delay: step.delay || 0, ...actionOptions }); break;
       case "press": await locator.press(step.key, actionOptions); break;
       case "select": await locator.selectOption(step.value, actionOptions); break;
       case "check": await locator.check(actionOptions); break;
@@ -414,16 +487,16 @@ class FlowRuntime {
       case "hover": await locator.hover(actionOptions); break;
       case "focus": await locator.focus(actionOptions); break;
       case "wait": await locator.waitFor({ state: step.state || "visible", ...actionOptions }); break;
-      case "readText": outputs[step.as || "text"] = await locator.textContent(); break;
+      case "readText": outputs[step.as || "text"] = await locator.textContent(actionOptions); break;
       case "readAllText": outputs[step.as || "texts"] = await locator.allTextContents(); break;
-      case "readAttribute": outputs[step.as || step.attribute] = await locator.getAttribute(step.attribute); break;
+      case "readAttribute": outputs[step.as || step.attribute] = await locator.getAttribute(step.attribute, actionOptions); break;
       case "readBoundingBox": {
-        const box = await locator.boundingBox();
+        const box = await locator.boundingBox(actionOptions);
         assertExpected(box, "Target has no visible bounding box");
         outputs[step.as || "box"] = withBoxEdges(box);
         break;
       }
-      case "readComputedStyle": outputs[step.as || "computedStyle"] = await readStyles(locator, step.properties); break;
+      case "readComputedStyle": outputs[step.as || "computedStyle"] = await readStyles(locator, step.properties, actionOptions); break;
       default: throw new ContractError(`Unsupported step operation: ${step.op}`);
     }
   }
@@ -663,11 +736,11 @@ const targetSchema = {
   description: "One semantic/CSS locator, optionally scoped to an ancestor with within and/or to an iframe with frame.",
   properties: {
     role: { type: "string", minLength: 1 },
-    name: { type: ["string", "number", "boolean"] },
-    text: { type: ["string", "number", "boolean"] },
-    label: { type: ["string", "number", "boolean"] },
-    placeholder: { type: ["string", "number", "boolean"] },
-    testId: { type: ["string", "number"] },
+    name: { type: "string", minLength: 1 },
+    text: { type: "string", minLength: 1 },
+    label: { type: "string", minLength: 1 },
+    placeholder: { type: "string", minLength: 1 },
+    testId: { type: "string", minLength: 1 },
     css: { type: "string", minLength: 1 },
     exact: { type: "boolean" },
     first: { type: "boolean" },
@@ -687,7 +760,7 @@ const targetSchema = {
 };
 
 const basicLocatorStepOps = [
-  "click", "fill", "clear", "type", "check", "uncheck", "hover", "focus",
+  "click", "clear", "check", "uncheck", "hover", "focus",
   "readText", "readAllText", "readBoundingBox",
 ];
 
@@ -707,7 +780,7 @@ const stepSchema = {
     attribute: { type: "string", minLength: 1 },
     properties: { type: "array", minItems: 1, items: { type: "string", minLength: 1 } },
     as: { type: "string", minLength: 1, description: "Output key for reads/evaluate." },
-    timeoutMs: { type: "integer", minimum: 1 },
+    timeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS },
     waitUntil: { type: "string", enum: [...supportedWaitUntil] },
     popup: { type: "string", enum: ["switch"], description: "On click, atomically wait for and switch to the new page." },
     expression: { type: "string", minLength: 1, description: "Page expression or function expression for evaluate; optional arg is available and passed to functions." },
@@ -730,6 +803,7 @@ const stepSchema = {
     { properties: { op: { const: "readComputedStyle" } }, required: ["target", "properties"] },
     { properties: { op: { const: "press" } }, required: ["target", "key"] },
     { properties: { op: { const: "select" } }, required: ["target", "value"] },
+    { properties: { op: { enum: ["fill", "type"] }, value: { type: "string" } }, required: ["target", "value"] },
     { properties: { op: { enum: basicLocatorStepOps } }, required: ["target"] },
   ],
   allOf: [
@@ -750,7 +824,35 @@ const stepSchema = {
         ],
       },
     },
+    {
+      if: { properties: { op: { const: "readAllText" } }, required: ["op"] },
+      then: { not: { required: ["timeoutMs"] } },
+    },
   ],
+  additionalProperties: false,
+};
+
+const routeSchema = {
+  type: "object",
+  description: "One first-match request rule. Define exactly one response action: json, body, or abort.",
+  properties: {
+    url: { type: "string", minLength: 1, description: "URL glob." },
+    method: { type: "string", minLength: 1 },
+    requestBody: { type: ["object", "array"], description: "Partial JSON body that must match." },
+    requestBodyIncludes: { type: "string", description: "Raw request-body fragment that must match." },
+    cors: { type: "boolean", description: "Fulfill credential-compatible CORS headers and OPTIONS preflight." },
+    json: { description: "JSON response body." },
+    body: { type: "string", description: "Text response body." },
+    abort: {
+      oneOf: [{ const: true }, { type: "string", minLength: 1 }],
+      description: "Abort with failed when true, or with the supplied Playwright error code.",
+    },
+    status: { type: "integer", minimum: 100, maximum: 599 },
+    headers: { type: "object", additionalProperties: { type: "string" } },
+    contentType: { type: "string", minLength: 1 },
+  },
+  required: ["url"],
+  oneOf: ["json", "body", "abort"].map((key) => ({ required: [key] })),
   additionalProperties: false,
 };
 
@@ -772,7 +874,8 @@ const expectationSchema = {
 
 const contractSchema = {
   type: "object",
-  $defs: { frame: frameSchema, target: targetSchema, step: stepSchema, expectation: expectationSchema },
+  description: `One bounded browser flow. Explicit operation timeouts are capped at ${MAX_OPERATION_TIMEOUT_MS}ms and the estimated combined budget at ${MAX_CONTRACT_BUDGET_MS}ms.`,
+  $defs: { frame: frameSchema, target: targetSchema, route: routeSchema, step: stepSchema, expectation: expectationSchema },
   properties: {
     id: { type: "string", description: "Short flow identifier." },
     url: { type: "string", minLength: 1, description: "Optional entry URL." },
@@ -784,8 +887,8 @@ const contractSchema = {
       allOf: [{ $ref: "#/$defs/expectation" }],
     },
     evidence: { type: "string", enum: [...supportedEvidence] },
-    timeoutMs: { type: "integer", minimum: 1 },
-    navigationTimeoutMs: { type: "integer", minimum: 1 },
+    timeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS },
+    navigationTimeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS },
     waitUntil: { type: "string", enum: [...supportedWaitUntil] },
     cookies: { type: "array", items: { type: "object", additionalProperties: true } },
     localStorage: {
@@ -796,7 +899,7 @@ const contractSchema = {
     routes: {
       type: "array",
       description: "First-match request mocks scoped to this run and removed before it returns. In URL globs, ? matches exactly one character; use a trailing * when a query string is optional.",
-      items: { type: "object", additionalProperties: true },
+      items: { $ref: "#/$defs/route" },
     },
     captureResponses: {
       type: "array",
@@ -807,7 +910,7 @@ const contractSchema = {
           url: { type: "string", minLength: 1, description: "URL glob." }, method: { type: "string", minLength: 1 },
           body: { type: "string", enum: ["json", "text"], default: "json" }, as: { type: "string", minLength: 1 },
           count: { type: "integer", minimum: 1, default: 1 }, maxBodyBytes: { type: "integer", minimum: 1, default: 1000000 },
-          timeoutMs: { type: "integer", minimum: 1 }, required: { type: "boolean", default: true },
+          timeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS }, required: { type: "boolean", default: true },
         },
         required: ["url", "as"],
         additionalProperties: false,
@@ -828,7 +931,12 @@ const contractSchema = {
 module.exports = {
   AssertionError,
   ContractError,
+  DEFAULT_NAVIGATION_TIMEOUT_MS,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_VIEWPORT,
   FlowRuntime,
+  MAX_CONTRACT_BUDGET_MS,
+  MAX_OPERATION_TIMEOUT_MS,
   PopupError,
   classifyFailure,
   compactError,

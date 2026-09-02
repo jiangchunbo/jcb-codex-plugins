@@ -1,5 +1,8 @@
 const readline = require("node:readline");
 const {
+  DEFAULT_NAVIGATION_TIMEOUT_MS,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_VIEWPORT,
   FlowRuntime,
   classifyFailure,
   compactError,
@@ -9,9 +12,8 @@ const {
 } = require("../shared/contract");
 
 const SERVER_NAME = "playwright-fast";
-const SERVER_VERSION = "0.1.0";
+const { version: SERVER_VERSION } = require("../.codex-plugin/plugin.json");
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
-const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 let chromium;
 
 function positiveInteger(value, fallback) {
@@ -36,8 +38,8 @@ class PersistentRuntime {
     this.pageErrors = [];
     this.requestFailures = [];
     this.attachedPages = new WeakSet();
-    this.defaultTimeoutMs = 2000;
-    this.defaultNavigationTimeoutMs = 5000;
+    this.defaultTimeoutMs = DEFAULT_TIMEOUT_MS;
+    this.defaultNavigationTimeoutMs = DEFAULT_NAVIGATION_TIMEOUT_MS;
   }
 
   isWarm() {
@@ -133,6 +135,8 @@ class PersistentRuntime {
       expiresInMs: warm ? Math.max(0, this.ttlMs - (now - this.lastUsedAt)) : 0,
       uptimeMs: warm ? now - this.startedAt : 0,
       url: warm ? this.page.url() : null,
+      viewport: warm ? this.page.viewportSize() : null,
+      version: SERVER_VERSION,
       launches: this.launches,
       resets: this.resets,
       runs: this.runs,
@@ -159,8 +163,8 @@ class PersistentRuntime {
     try {
       validateContract(contract);
       coldStarted = contract.reset ? (await this.reset(true), true) : await this.ensure();
-      this.defaultTimeoutMs = positiveInteger(contract.timeoutMs, 2000);
-      this.defaultNavigationTimeoutMs = positiveInteger(contract.navigationTimeoutMs, 5000);
+      this.defaultTimeoutMs = positiveInteger(contract.timeoutMs, DEFAULT_TIMEOUT_MS);
+      this.defaultNavigationTimeoutMs = positiveInteger(contract.navigationTimeoutMs, DEFAULT_NAVIGATION_TIMEOUT_MS);
       this.attachPage(this.page);
       flow = new FlowRuntime({
         context: this.context,
@@ -169,10 +173,8 @@ class PersistentRuntime {
         defaultTimeoutMs: this.defaultTimeoutMs,
       });
 
-      if (contract.viewport) {
-        phase = "viewport";
-        await this.page.setViewportSize(contract.viewport);
-      }
+      phase = "viewport";
+      await this.page.setViewportSize(contract.viewport || DEFAULT_VIEWPORT);
       if ((contract.routes || []).length > 0 || (contract.blockResourceTypes || []).length > 0) {
         phase = "routes";
         routeHandler = await flow.installNetworkRules(contract, routeCalls);
@@ -239,6 +241,7 @@ class PersistentRuntime {
           runtime: coldStarted ? "cold" : "warm",
           elapsedMs: Math.round(performance.now() - started),
           url: this.page.url(),
+          viewport: this.page.viewportSize(),
           outputs,
           observations,
           ...(healthFailure ? { failureKind: "page" } : {}),
@@ -266,6 +269,7 @@ class PersistentRuntime {
           failureKind,
           elapsedMs: Math.round(performance.now() - started),
           url: this.page?.url() || null,
+          viewport: this.page?.viewportSize() || null,
           error: compactError(error),
           ...(stepResults.length > 0 ? { stepResults } : {}),
           ...(Object.keys(outputs).length > 0 ? { outputs } : {}),

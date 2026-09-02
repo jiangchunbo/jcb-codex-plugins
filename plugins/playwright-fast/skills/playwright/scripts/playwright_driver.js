@@ -1,6 +1,12 @@
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const readline = require("node:readline");
 const { chromium } = require("playwright");
 const {
+  DEFAULT_NAVIGATION_TIMEOUT_MS,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_VIEWPORT,
   FlowRuntime,
   classifyFailure,
   compactError,
@@ -9,7 +15,6 @@ const {
 } = require("../../../shared/contract");
 
 const startedAt = performance.now();
-const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 let browser;
 let context;
 let page;
@@ -17,8 +22,10 @@ let closing = false;
 let consoleErrors = [];
 let pageErrors = [];
 let requestFailures = [];
-let defaultTimeoutMs = 2000;
-let defaultNavigationTimeoutMs = 5000;
+let defaultTimeoutMs = DEFAULT_TIMEOUT_MS;
+let defaultNavigationTimeoutMs = DEFAULT_NAVIGATION_TIMEOUT_MS;
+let artifactDir;
+let screenshotSequence = 0;
 const attachedPages = new WeakSet();
 
 function emit(payload) {
@@ -27,6 +34,12 @@ function emit(payload) {
 
 function safeId(value) {
   return String(value || "flow").replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 80);
+}
+
+function defaultScreenshotPath(id, suffix = "") {
+  if (!artifactDir) artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), "playwright-fast-"));
+  screenshotSequence += 1;
+  return path.join(artifactDir, `${String(screenshotSequence).padStart(4, "0")}-${id}${suffix}.png`);
 }
 
 function positiveInteger(value, fallback) {
@@ -85,15 +98,13 @@ async function runContract(contract) {
   try {
     validateContract(contract);
     if (contract.reset) await resetRuntime();
-    defaultTimeoutMs = positiveInteger(contract.timeoutMs, 2000);
-    defaultNavigationTimeoutMs = positiveInteger(contract.navigationTimeoutMs, 5000);
+    defaultTimeoutMs = positiveInteger(contract.timeoutMs, DEFAULT_TIMEOUT_MS);
+    defaultNavigationTimeoutMs = positiveInteger(contract.navigationTimeoutMs, DEFAULT_NAVIGATION_TIMEOUT_MS);
     attachPage(page);
     const flow = new FlowRuntime({ context, page, onPage: adoptPage, defaultTimeoutMs });
 
-    if (contract.viewport) {
-      phase = "viewport";
-      await page.setViewportSize(contract.viewport);
-    }
+    phase = "viewport";
+    await page.setViewportSize(contract.viewport || DEFAULT_VIEWPORT);
     if ((contract.routes || []).length > 0 || (contract.blockResourceTypes || []).length > 0) {
       phase = "routes";
       networkHandler = await flow.installNetworkRules(contract, routeCalls);
@@ -143,7 +154,7 @@ async function runContract(contract) {
     }
     if (evidence === "visual" || evidence === "diag") {
       phase = "screenshot";
-      screenshotPath = contract.screenshot?.path || `/tmp/playwright-efficient-${id}.png`;
+      screenshotPath = contract.screenshot?.path || defaultScreenshotPath(id);
       await page.screenshot({ path: screenshotPath, fullPage: Boolean(contract.screenshot?.fullPage) });
     }
 
@@ -157,6 +168,7 @@ async function runContract(contract) {
       ...(healthFailure ? { failureKind: "page" } : {}),
       elapsedMs: Math.round(performance.now() - started),
       url: page.url(),
+      viewport: page.viewportSize(),
       outputs,
       observations,
       ...(screenshotPath ? { screenshot: screenshotPath } : {}),
@@ -167,7 +179,7 @@ async function runContract(contract) {
   } catch (error) {
     const failureKind = classifyFailure(error, phase);
     if (failureKind !== "contract" && (evidence === "visual" || evidence === "diag") && !screenshotPath) {
-      screenshotPath = contract?.screenshot?.path || `/tmp/playwright-efficient-${id}-failure.png`;
+      screenshotPath = contract?.screenshot?.path || defaultScreenshotPath(id, "-failure");
       try {
         await page.screenshot({ path: screenshotPath, fullPage: false });
       } catch {
@@ -182,6 +194,7 @@ async function runContract(contract) {
       failureKind,
       elapsedMs: Math.round(performance.now() - started),
       url: page?.url(),
+      viewport: page?.viewportSize() || null,
       error: compactError(error),
       ...(stepResults.length > 0 ? { stepResults } : {}),
       ...(Object.keys(outputs).length > 0 ? { outputs } : {}),
