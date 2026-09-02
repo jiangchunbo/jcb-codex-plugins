@@ -1,0 +1,4 @@
+interface:
+  display_name: "Java Enum Mappings"
+  short_description: "JCB enum contracts for MyBatis and Jackson."
+  default_prompt: "Use $design-java-enum-mappings to design or review these Java enum mappings."
