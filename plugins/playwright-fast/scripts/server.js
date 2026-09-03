@@ -8,6 +8,8 @@ const {
   compactError,
   contractSchema,
   recordRequestFailure,
+  resolveViewport,
+  screenshotTimeoutMs,
   validateContract,
 } = require("../shared/contract");
 
@@ -156,6 +158,7 @@ class PersistentRuntime {
     let flow;
     let image;
     let coldStarted = false;
+    const runtimeLabel = () => coldStarted ? "cold" : this.isWarm() ? "warm" : "idle";
     this.consoleErrors = [];
     this.pageErrors = [];
     this.requestFailures = [];
@@ -174,7 +177,7 @@ class PersistentRuntime {
       });
 
       phase = "viewport";
-      await this.page.setViewportSize(contract.viewport || DEFAULT_VIEWPORT);
+      await this.page.setViewportSize(resolveViewport(contract, this.page.viewportSize()));
       if ((contract.routes || []).length > 0 || (contract.blockResourceTypes || []).length > 0) {
         phase = "routes";
         routeHandler = await flow.installNetworkRules(contract, routeCalls);
@@ -227,6 +230,7 @@ class PersistentRuntime {
         image = await this.page.screenshot({
           ...(contract.screenshot?.path ? { path: contract.screenshot.path } : {}),
           fullPage: Boolean(contract.screenshot?.fullPage),
+          timeout: screenshotTimeoutMs(this.defaultTimeoutMs, this.defaultNavigationTimeoutMs),
         });
       }
 
@@ -238,7 +242,7 @@ class PersistentRuntime {
         result: {
           ok: !healthFailure,
           id: String(contract.id || "flow").slice(0, 80),
-          runtime: coldStarted ? "cold" : "warm",
+          runtime: runtimeLabel(),
           elapsedMs: Math.round(performance.now() - started),
           url: this.page.url(),
           viewport: this.page.viewportSize(),
@@ -254,9 +258,13 @@ class PersistentRuntime {
       };
     } catch (error) {
       const failureKind = classifyFailure(error, phase);
-      if (evidence === "diag" && !image && this.page && !this.page.isClosed()) {
+      if ((evidence === "visual" || evidence === "diag") && !image && this.page && !this.page.isClosed()) {
         try {
-          image = await this.page.screenshot({ fullPage: false });
+          image = await this.page.screenshot({
+            ...(contract?.screenshot?.path ? { path: contract.screenshot.path } : {}),
+            fullPage: false,
+            timeout: screenshotTimeoutMs(this.defaultTimeoutMs, this.defaultNavigationTimeoutMs),
+          });
         } catch {}
       }
       this.runs += 1;
@@ -264,7 +272,7 @@ class PersistentRuntime {
         result: {
           ok: false,
           id: String(contract?.id || "flow").slice(0, 80),
-          runtime: coldStarted ? "cold" : "warm",
+          runtime: runtimeLabel(),
           phase,
           failureKind,
           elapsedMs: Math.round(performance.now() - started),
@@ -330,7 +338,8 @@ async function callTool(name, args) {
     const { result, image } = await runtime.run(args || {});
     const content = [{ type: "text", text: JSON.stringify(result) }];
     if (image) content.push({ type: "image", data: image.toString("base64"), mimeType: "image/png" });
-    return { content, isError: !result.ok };
+    const toolExecutionFailed = !result.ok && ["contract", "runtime"].includes(result.failureKind);
+    return { content, isError: toolExecutionFailed };
   }
   if (name === "reset") {
     const result = await runtime.reset(args?.warm !== false);

@@ -11,6 +11,8 @@ const {
   MAX_CONTRACT_BUDGET_MS,
   MAX_OPERATION_TIMEOUT_MS,
   contractSchema,
+  resolveViewport,
+  screenshotTimeoutMs,
   validateContract,
 } = require("../shared/contract");
 
@@ -31,6 +33,7 @@ before(async () => {
       send(response, 200, "text/html; charset=utf-8", `<!doctype html>
         <title>Start</title>
         <button id="load">Load data</button>
+        <input id="seed-value" value="seed">
         <div class="account-row"><span>13900000000</span><span>Teacher</span><button onclick="window.open('/wrong')">模拟登录</button></div>
         <div class="account-row"><span>13900000000</span><span>Administrator</span><button onclick="window.open('/popup')">模拟登录</button></div>
         <button id="no-popup">No popup</button>
@@ -108,6 +111,7 @@ function flowContract(id) {
     steps: [
       { op: "click", target: { role: "button", name: "Load data" } },
       { op: "wait", target: { css: "#load[data-done=true]" } },
+      { op: "readValue", target: { css: "#seed-value" }, as: "seedValue" },
       {
         op: "readText",
         target: { text: "13900000000", within: { css: ".account-row", hasText: ["13900000000", "Administrator"] } },
@@ -146,6 +150,7 @@ function assertFlowResult(result) {
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.url, `${fixtureOrigin}/next`);
   assert.equal(result.outputs.phone, "13900000000");
+  assert.equal(result.outputs.seedValue, "seed");
   assert.equal(result.outputs.frameHeading, "Frame details");
   assert.deepEqual(result.outputs.frameEvaluation, { heading: "Frame details", seed: 7 });
   assert.equal(result.outputs.popupText, "Target account");
@@ -285,6 +290,7 @@ test("schema exposes scoped targets and validates new operations", () => {
   assert(contractSchema.$defs.step.properties.popup.enum.includes("switch"));
   assert(contractSchema.$defs.step.properties.op.enum.includes("goto"));
   assert(contractSchema.$defs.step.properties.op.enum.includes("evaluate"));
+  assert(contractSchema.$defs.step.properties.op.enum.includes("readValue"));
   assert.match(contractSchema.properties.ready.description, /nest the locator under target/);
   assert.match(contractSchema.properties.routes.description, /scoped to this run/);
   validateContract(flowContract("validation"));
@@ -352,6 +358,7 @@ test("read operations pass supported per-step timeouts to Playwright", async () 
   const locator = {
     textContent: async (options) => { calls.push(["textContent", options]); return "text"; },
     getAttribute: async (name, options) => { calls.push(["getAttribute", name, options]); return "value"; },
+    inputValue: async (options) => { calls.push(["inputValue", options]); return "input"; },
     boundingBox: async (options) => { calls.push(["boundingBox", options]); return { x: 0, y: 0, width: 1, height: 1 }; },
     evaluate: async (_callback, properties, options) => { calls.push(["evaluate", properties, options]); return { color: "red" }; },
   };
@@ -360,15 +367,28 @@ test("read operations pass supported per-step timeouts to Playwright", async () 
 
   await flow.runStep({ op: "readText", target: { css: "main" }, timeoutMs: 75 }, outputs);
   await flow.runStep({ op: "readAttribute", target: { css: "main" }, attribute: "data-id", timeoutMs: 80 }, outputs);
+  await flow.runStep({ op: "readValue", target: { css: "input" }, timeoutMs: 82, as: "input" }, outputs);
   await flow.runStep({ op: "readBoundingBox", target: { css: "main" }, timeoutMs: 85 }, outputs);
   await flow.runStep({ op: "readComputedStyle", target: { css: "main" }, properties: ["color"], timeoutMs: 90 }, outputs);
 
   assert.deepEqual(calls, [
     ["textContent", { timeout: 75 }],
     ["getAttribute", "data-id", { timeout: 80 }],
+    ["inputValue", { timeout: 82 }],
     ["boundingBox", { timeout: 85 }],
     ["evaluate", ["color"], { timeout: 90 }],
   ]);
+  assert.equal(outputs.input, "input");
+});
+
+test("continuations preserve viewport and screenshots use the navigation timeout floor", () => {
+  const mobile = { width: 375, height: 813 };
+  assert.deepEqual(resolveViewport({ steps: [{ op: "click" }] }, mobile), mobile);
+  assert.deepEqual(resolveViewport({ url: "http://app.test" }, mobile), DEFAULT_VIEWPORT);
+  assert.deepEqual(resolveViewport({ steps: [{ op: "goto" }] }, mobile), DEFAULT_VIEWPORT);
+  assert.deepEqual(resolveViewport({ steps: [{ op: "setContent" }] }, mobile), DEFAULT_VIEWPORT);
+  assert.equal(screenshotTimeoutMs(2000, 5000), 5000);
+  assert.equal(screenshotTimeoutMs(8000, 5000), 8000);
 });
 
 test("MCP host timeout leaves margin above the bounded contract budget", () => {
@@ -498,12 +518,16 @@ test("MCP entrypoint runs scoped popup, response, frame, goto, and evaluate flow
     client.write({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "run", arguments: viewportContract("mcp-mobile", { width: 375, height: 667 }) } });
     const mobile = JSON.parse((await client.waitFor((message) => message.id === 4)).result.content[0].text);
     assert.deepEqual(mobile.viewport, { width: 375, height: 667 });
-    client.write({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "run", arguments: viewportContract("mcp-default") } });
-    const desktop = JSON.parse((await client.waitFor((message) => message.id === 5)).result.content[0].text);
+    client.write({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "run", arguments: { id: "mcp-continuation", steps: [{ op: "evaluate", expression: "({ width: innerWidth, height: innerHeight })", as: "viewport" }] } } });
+    const continuation = JSON.parse((await client.waitFor((message) => message.id === 5)).result.content[0].text);
+    assert.deepEqual(continuation.viewport, { width: 375, height: 667 });
+    assert.deepEqual(continuation.outputs.viewport, { width: 375, height: 667 });
+    client.write({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "run", arguments: viewportContract("mcp-default") } });
+    const desktop = JSON.parse((await client.waitFor((message) => message.id === 6)).result.content[0].text);
     assert.deepEqual(desktop.viewport, DEFAULT_VIEWPORT);
     assert.deepEqual(desktop.outputs.viewport, DEFAULT_VIEWPORT);
-    client.write({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "status", arguments: {} } });
-    const status = JSON.parse((await client.waitFor((message) => message.id === 6)).result.content[0].text);
+    client.write({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "status", arguments: {} } });
+    const status = JSON.parse((await client.waitFor((message) => message.id === 7)).result.content[0].text);
     assert.equal(status.version, manifest.version);
     assert.deepEqual(status.viewport, DEFAULT_VIEWPORT);
   } finally {
@@ -529,6 +553,10 @@ test("JSONL entrypoint runs the same flow", { timeout: 20_000 }, async () => {
     client.write(viewportContract("jsonl-mobile", { width: 390, height: 844 }));
     const mobile = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-mobile");
     assert.deepEqual(mobile.viewport, { width: 390, height: 844 });
+    client.write({ id: "jsonl-continuation", steps: [{ op: "evaluate", expression: "({ width: innerWidth, height: innerHeight })", as: "viewport" }] });
+    const continuation = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-continuation");
+    assert.deepEqual(continuation.viewport, { width: 390, height: 844 });
+    assert.deepEqual(continuation.outputs.viewport, { width: 390, height: 844 });
     client.write(viewportContract("jsonl-default"));
     const desktop = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-default");
     assert.deepEqual(desktop.viewport, DEFAULT_VIEWPORT);
@@ -564,21 +592,35 @@ test("MCP failure reports step progress and classifies a missing popup as page",
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
-      params: {
-        name: "run",
-        arguments: missingPopupContract("missing-popup"),
-      },
+      params: { name: "run", arguments: { steps: [{ op: "unsupported" }] } },
     });
-    const reply = await client.waitFor((message) => message.id === 2);
-    const result = JSON.parse(reply.result.content[0].text);
-    assertMissingPopupResult(result);
+    const contractReply = await client.waitFor((message) => message.id === 2);
+    assert.equal(contractReply.result.isError, true);
+    const contractResult = JSON.parse(contractReply.result.content[0].text);
+    assert.equal(contractResult.failureKind, "contract");
+    assert.equal(contractResult.runtime, "idle");
     client.write({
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
+      params: {
+        name: "run",
+        arguments: { ...missingPopupContract("missing-popup"), evidence: "visual" },
+      },
+    });
+    const reply = await client.waitFor((message) => message.id === 3);
+    assert.equal(reply.result.isError, false);
+    assert(reply.result.content.some((item) => item.type === "image"));
+    const result = JSON.parse(reply.result.content[0].text);
+    assertMissingPopupResult(result);
+    client.write({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
       params: { name: "run", arguments: requestFailureContract("mcp-network-failure") },
     });
-    const networkReply = await client.waitFor((message) => message.id === 3);
+    const networkReply = await client.waitFor((message) => message.id === 4);
+    assert.equal(networkReply.result.isError, false);
     assertRequestFailureEvidence(JSON.parse(networkReply.result.content[0].text));
   } finally {
     await client.stop();

@@ -11,6 +11,8 @@ const {
   classifyFailure,
   compactError,
   recordRequestFailure,
+  resolveViewport,
+  screenshotTimeoutMs,
   validateContract,
 } = require("../../../shared/contract");
 
@@ -104,7 +106,7 @@ async function runContract(contract) {
     const flow = new FlowRuntime({ context, page, onPage: adoptPage, defaultTimeoutMs });
 
     phase = "viewport";
-    await page.setViewportSize(contract.viewport || DEFAULT_VIEWPORT);
+    await page.setViewportSize(resolveViewport(contract, page.viewportSize()));
     if ((contract.routes || []).length > 0 || (contract.blockResourceTypes || []).length > 0) {
       phase = "routes";
       networkHandler = await flow.installNetworkRules(contract, routeCalls);
@@ -155,7 +157,11 @@ async function runContract(contract) {
     if (evidence === "visual" || evidence === "diag") {
       phase = "screenshot";
       screenshotPath = contract.screenshot?.path || defaultScreenshotPath(id);
-      await page.screenshot({ path: screenshotPath, fullPage: Boolean(contract.screenshot?.fullPage) });
+      await page.screenshot({
+        path: screenshotPath,
+        fullPage: Boolean(contract.screenshot?.fullPage),
+        timeout: screenshotTimeoutMs(defaultTimeoutMs, defaultNavigationTimeoutMs),
+      });
     }
 
     const healthFailure =
@@ -181,7 +187,11 @@ async function runContract(contract) {
     if (failureKind !== "contract" && (evidence === "visual" || evidence === "diag") && !screenshotPath) {
       screenshotPath = contract?.screenshot?.path || defaultScreenshotPath(id, "-failure");
       try {
-        await page.screenshot({ path: screenshotPath, fullPage: false });
+        await page.screenshot({
+          path: screenshotPath,
+          fullPage: false,
+          timeout: screenshotTimeoutMs(defaultTimeoutMs, defaultNavigationTimeoutMs),
+        });
       } catch {
         screenshotPath = undefined;
       }

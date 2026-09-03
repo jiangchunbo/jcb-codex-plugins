@@ -9,7 +9,7 @@ const MAX_CONTRACT_BUDGET_MS = 45_000;
 const supportedSteps = new Set([
   "setContent", "goto", "click", "fill", "clear", "type", "press", "select", "check",
   "uncheck", "hover", "focus", "wait", "readText", "readAllText", "readAttribute",
-  "readBoundingBox", "readComputedStyle", "evaluate",
+  "readValue", "readBoundingBox", "readComputedStyle", "evaluate",
 ]);
 const selectorKeys = ["role", "text", "label", "placeholder", "testId", "css"];
 
@@ -129,6 +129,18 @@ function estimateContractBudgetMs(contract) {
     if (capture.required !== false) budgetMs += capture.timeoutMs || defaultTimeoutMs;
   }
   return budgetMs;
+}
+
+function resolveViewport(contract, currentViewport) {
+  if (contract.viewport) return contract.viewport;
+  const startsDocument = Boolean(contract.url) || (contract.steps || []).some(
+    (step) => step.op === "goto" || step.op === "setContent",
+  );
+  return startsDocument ? DEFAULT_VIEWPORT : currentViewport || DEFAULT_VIEWPORT;
+}
+
+function screenshotTimeoutMs(defaultTimeoutMs, navigationTimeoutMs) {
+  return Math.max(defaultTimeoutMs || DEFAULT_TIMEOUT_MS, navigationTimeoutMs || DEFAULT_NAVIGATION_TIMEOUT_MS);
 }
 
 function validateContract(contract) {
@@ -490,6 +502,7 @@ class FlowRuntime {
       case "readText": outputs[step.as || "text"] = await locator.textContent(actionOptions); break;
       case "readAllText": outputs[step.as || "texts"] = await locator.allTextContents(); break;
       case "readAttribute": outputs[step.as || step.attribute] = await locator.getAttribute(step.attribute, actionOptions); break;
+      case "readValue": outputs[step.as || "value"] = await locator.inputValue(actionOptions); break;
       case "readBoundingBox": {
         const box = await locator.boundingBox(actionOptions);
         assertExpected(box, "Target has no visible bounding box");
@@ -761,7 +774,7 @@ const targetSchema = {
 
 const basicLocatorStepOps = [
   "click", "clear", "check", "uncheck", "hover", "focus",
-  "readText", "readAllText", "readBoundingBox",
+  "readText", "readAllText", "readValue", "readBoundingBox",
 ];
 
 const stepSchema = {
@@ -879,7 +892,13 @@ const contractSchema = {
   properties: {
     id: { type: "string", description: "Short flow identifier." },
     url: { type: "string", minLength: 1, description: "Optional entry URL." },
-    viewport: { type: "object", properties: { width: { type: "integer" }, height: { type: "integer" } }, required: ["width", "height"], additionalProperties: false },
+    viewport: {
+      type: "object",
+      description: "Viewport for this run. When omitted, new-document flows use 1440x900 and continuation flows preserve the current viewport.",
+      properties: { width: { type: "integer" }, height: { type: "integer" } },
+      required: ["width", "height"],
+      additionalProperties: false,
+    },
     steps: { type: "array", items: { $ref: "#/$defs/step" } },
     expect: { type: "array", items: { $ref: "#/$defs/expectation" } },
     ready: {
@@ -942,5 +961,7 @@ module.exports = {
   compactError,
   contractSchema,
   recordRequestFailure,
+  resolveViewport,
+  screenshotTimeoutMs,
   validateContract,
 };

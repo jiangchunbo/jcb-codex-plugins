@@ -45,7 +45,8 @@ scoped `css`. Scope repeated controls with `within`; add target-level `frame`, `
 when required. Use a click with `"popup":"switch"` to adopt a new page atomically.
 
 Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, and `evaluate`
-only when declarative operations cannot express the action. Use `cors:true` for
+only when declarative operations cannot express the action. Use `readValue` for form-control values.
+Use `cors:true` for
 credential-compatible route responses and OPTIONS handling. Claim that a preflight occurred only
 when captured route calls contain `cors-preflight`.
 
@@ -60,11 +61,15 @@ Check these contract shapes before running:
 - In URL globs, `?` matches one character. Use `**/toc/orders*` to cover the path both with and
   without a query string.
 - Use per-step `timeoutMs` only for a known operation that needs a different ceiling.
+- When a custom-element click fails because a text match resolves to an inner node and its ancestor
+  intercepts pointer events, target the actual interactive ancestor with scoped `css` on the next run.
 
-The runtime defaults to a `1440x900` viewport, 2-second locator timeout, 5-second navigation
-timeout, `domcontentloaded`, reduced motion, blocked service workers, and a 30-minute idle TTL.
-Follow repository viewport rules when they differ. Read the router configuration before choosing a
-URL; Hash Router routes require `/#/...`.
+New-document flows default to a `1440x900` viewport. Continuation contracts without a top-level
+`url`, `goto`, or `setContent` preserve the current viewport, including targeted diagnostics. The
+runtime otherwise uses a 2-second locator timeout, 5-second navigation and screenshot timeout,
+`domcontentloaded`, reduced motion, blocked service workers, and a 30-minute idle TTL. Follow
+repository viewport rules when they differ. Read the router configuration before choosing a URL;
+Hash Router routes require `/#/...`.
 
 Reuse existing browser state. Provide cookies and origin-scoped `localStorage` in the contract when
 that avoids repeating login. Persistent browser state does not make network fixtures persistent.
@@ -75,8 +80,8 @@ Use exactly one tier:
 
 - `ultra` (default): requested assertions only.
 - `health`: assertions plus console and page errors.
-- `visual`: assertions plus one viewport screenshot. Inspect that screenshot before making layout
-  or visual claims.
+- `visual`: assertions plus one viewport screenshot, including when the flow fails. Inspect that
+  screenshot before making layout or visual claims.
 - `diag`: errors, one screenshot, and the failing phase. Use only after failure or when explicitly
   requested.
 
@@ -95,6 +100,9 @@ route rules only when diagnosis navigates or reloads.
 Treat `requestFailures` accompanying a locator failure as candidate causes until the application
 data flow proves they feed the missing target. Do not reset merely to change routes. When a reset is
 necessary and another flow follows immediately, set `reset:true` on that next `run`.
+
+Always inspect the returned `ok` field. Locator, assertion, navigation, network, and page failures
+are completed tool calls with `ok:false`; malformed contracts and runtime faults are tool errors.
 
 ## Report Compactly
 
