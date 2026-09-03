@@ -178,7 +178,12 @@ function validateContract(contract) {
       if (route.requestBody !== undefined) assertContract(route.requestBody && typeof route.requestBody === "object", `routes[${index}].requestBody must be an object or array`);
       if (route.requestBodyIncludes !== undefined) assertContract(typeof route.requestBodyIncludes === "string", `routes[${index}].requestBodyIncludes must be a string`);
       if (route.cors !== undefined) assertContract(typeof route.cors === "boolean", `routes[${index}].cors must be a boolean`);
-      if (route.body !== undefined) assertContract(typeof route.body === "string", `routes[${index}].body must be a string`);
+      if (route.body !== undefined) {
+        assertContract(
+          typeof route.body === "string",
+          `routes[${index}].body must be a string; use routes[${index}].json for objects or arrays`,
+        );
+      }
       if (route.abort !== undefined) assertContract(route.abort === true || (typeof route.abort === "string" && route.abort.length > 0), `routes[${index}].abort must be true or a non-empty error code`);
       if (route.status !== undefined) assertContract(Number.isInteger(route.status) && route.status >= 100 && route.status <= 599, `routes[${index}].status must be an HTTP status code`);
       if (route.headers !== undefined) {
@@ -425,6 +430,57 @@ class FlowRuntime {
     return locator;
   }
 
+  async resolveClickLocator(target, locator) {
+    if (target.text === undefined && !(target.role === "button" && target.name !== undefined)) {
+      return { locator };
+    }
+
+    let candidate = locator;
+    let strategy = "text-interactive-ancestor";
+    if (await candidate.count() === 0 && target.role === "button") {
+      candidate = this.locate({
+        text: target.name,
+        exact: target.exact,
+        first: target.first,
+        nth: target.nth,
+        hasText: target.hasText,
+        within: target.within,
+        frame: target.frame,
+      });
+      strategy = "button-name-interactive-ancestor";
+    }
+    if (await candidate.count() !== 1) return { locator };
+
+    const ancestorDistance = await candidate.evaluate((element) => {
+      const isInteractive = (node) => {
+        const tag = node.tagName.toLowerCase();
+        const inputType = node.getAttribute("type");
+        const classTokens = String(node.getAttribute("class") || "").split(/\s+/);
+        return tag === "button"
+          || tag === "a"
+          || tag === "summary"
+          || tag === "uni-button"
+          || node.getAttribute("role") === "button"
+          || (tag === "input" && ["button", "submit", "reset"].includes(inputType))
+          || classTokens.some((token) => /(?:^|[-_])btn(?:$|_[a-z0-9-]+$|--[a-z0-9-]+$)/i.test(token));
+      };
+      let current = element;
+      let distance = 0;
+      while (current) {
+        if (isInteractive(current)) return distance;
+        current = current.parentElement;
+        distance += 1;
+      }
+      return -1;
+    });
+    if (ancestorDistance === 0) return { locator: candidate };
+    if (ancestorDistance < 0) return { locator };
+
+    const ancestor = candidate.locator(`xpath=ancestor-or-self::*[${ancestorDistance + 1}]`);
+    if (await ancestor.count() !== 1) return { locator };
+    return { locator: ancestor, locatorFallback: strategy };
+  }
+
   async resolveEvaluationTarget(frame) {
     if (!frame) return this.page;
     if (frame.css === undefined) return frameFromNameOrUrl(this.page, frame);
@@ -473,7 +529,8 @@ class FlowRuntime {
     const locator = this.locate(step.target);
     const actionOptions = step.timeoutMs ? { timeout: step.timeoutMs } : undefined;
     switch (step.op) {
-      case "click":
+      case "click": {
+        const resolved = await this.resolveClickLocator(step.target, locator);
         if (step.popup === "switch") {
           let popupWaitError;
           const popupPromise = this.context.waitForEvent("page", {
@@ -482,13 +539,14 @@ class FlowRuntime {
             popupWaitError = error;
             return null;
           });
-          await locator.click(actionOptions);
+          await resolved.locator.click(actionOptions);
           const popup = await popupPromise;
           if (!popup) throw new PopupError(compactError(popupWaitError));
           await this.switchToPage(popup);
           await popup.waitForLoadState(step.waitUntil || "domcontentloaded", actionOptions);
-        } else await locator.click(actionOptions);
-        break;
+        } else await resolved.locator.click(actionOptions);
+        return resolved.locatorFallback ? { locatorFallback: resolved.locatorFallback } : undefined;
+      }
       case "fill": await locator.fill(step.value, actionOptions); break;
       case "clear": await locator.clear(actionOptions); break;
       case "type": await locator.pressSequentially(step.value, { delay: step.delay || 0, ...actionOptions }); break;
@@ -854,8 +912,8 @@ const routeSchema = {
     requestBody: { type: ["object", "array"], description: "Partial JSON body that must match." },
     requestBodyIncludes: { type: "string", description: "Raw request-body fragment that must match." },
     cors: { type: "boolean", description: "Fulfill credential-compatible CORS headers and OPTIONS preflight." },
-    json: { description: "JSON response body." },
-    body: { type: "string", description: "Text response body." },
+    json: { description: "Structured JSON response body. Use this for objects and arrays." },
+    body: { type: "string", description: "Plain text response body; use json for objects and arrays." },
     abort: {
       oneOf: [{ const: true }, { type: "string", minLength: 1 }],
       description: "Abort with failed when true, or with the supplied Playwright error code.",

@@ -152,6 +152,7 @@ class PersistentRuntime {
     const observations = [];
     const routeCalls = [];
     const stepResults = [];
+    const locatorFallbacks = [];
     let phase = "contract";
     let routeHandler;
     let responseCapture;
@@ -210,8 +211,13 @@ class PersistentRuntime {
         phase = `step:${index}:${step.op}`;
         const stepStarted = performance.now();
         try {
-          await flow.runStep(step, outputs);
-          stepResults.push({ index, op: step.op, ok: true, elapsedMs: Math.round(performance.now() - stepStarted) });
+          const stepMetadata = await flow.runStep(step, outputs);
+          const stepResult = { index, op: step.op, ok: true, elapsedMs: Math.round(performance.now() - stepStarted) };
+          if (stepMetadata?.locatorFallback) {
+            stepResult.locatorFallback = stepMetadata.locatorFallback;
+            locatorFallbacks.push({ index, strategy: stepMetadata.locatorFallback });
+          }
+          stepResults.push(stepResult);
         } catch (error) {
           stepResults.push({ index, op: step.op, ok: false, elapsedMs: Math.round(performance.now() - stepStarted) });
           throw error;
@@ -248,6 +254,7 @@ class PersistentRuntime {
           viewport: this.page.viewportSize(),
           outputs,
           observations,
+          ...(locatorFallbacks.length > 0 ? { locatorFallbacks } : {}),
           ...(healthFailure ? { failureKind: "page" } : {}),
           ...(evidence === "health" || evidence === "diag" ? { consoleErrors: this.consoleErrors, pageErrors: this.pageErrors } : {}),
           ...((evidence === "health" || evidence === "diag") && this.requestFailures.length > 0 ? { requestFailures: this.requestFailures } : {}),
@@ -282,6 +289,7 @@ class PersistentRuntime {
           ...(stepResults.length > 0 ? { stepResults } : {}),
           ...(Object.keys(outputs).length > 0 ? { outputs } : {}),
           ...(observations.length > 0 ? { observations } : {}),
+          ...(locatorFallbacks.length > 0 ? { locatorFallbacks } : {}),
           ...(evidence === "health" || evidence === "diag" ? { consoleErrors: this.consoleErrors, pageErrors: this.pageErrors } : {}),
           ...(this.requestFailures.length > 0 ? { requestFailures: this.requestFailures } : {}),
           ...(image ? { screenshotBytes: image.length } : {}),

@@ -58,11 +58,15 @@ Check these contract shapes before running:
   step-level `goto` creates the target, add a later `wait` step instead.
 - Treat `routes` and `blockResourceTypes` as call-scoped. Repeat required rules in every contract
   that navigates, reloads, or fetches mocked data.
+- Use `json` for structured mock responses and `body` only for text, for example
+  `{"routes":[{"url":"**/api/items*","method":"GET","cors":true,"json":{"code":200,"data":[]}}]}`.
 - In URL globs, `?` matches one character. Use `**/toc/orders*` to cover the path both with and
   without a query string.
 - Use per-step `timeoutMs` only for a known operation that needs a different ceiling.
-- When a custom-element click fails because a text match resolves to an inner node and its ancestor
-  intercepts pointer events, target the actual interactive ancestor with scoped `css` on the next run.
+- Text and button-name clicks automatically use a unique nearest interactive ancestor, including
+  `uni-button`, uni-app modal controls, and conventional `*-btn` elements. The result reports this
+  under `locatorFallbacks`. When more than one candidate exists, target the component explicitly,
+  for example `{"css":"uni-button","hasText":"保存"}`, and scope it with `within` when needed.
 
 New-document flows default to a `1440x900` viewport. Continuation contracts without a top-level
 `url`, `goto`, or `setContent` preserve the current viewport, including targeted diagnostics. The

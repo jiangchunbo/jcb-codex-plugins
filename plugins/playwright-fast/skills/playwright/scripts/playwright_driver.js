@@ -88,6 +88,7 @@ async function runContract(contract) {
   const observations = [];
   const routeCalls = [];
   const stepResults = [];
+  const locatorFallbacks = [];
   let phase = "contract";
   let networkHandler;
   let responseCapture;
@@ -139,8 +140,13 @@ async function runContract(contract) {
       phase = `step:${index}:${step.op}`;
       const stepStarted = performance.now();
       try {
-        await flow.runStep(step, outputs);
-        stepResults.push({ index, op: step.op, ok: true, elapsedMs: Math.round(performance.now() - stepStarted) });
+        const stepMetadata = await flow.runStep(step, outputs);
+        const stepResult = { index, op: step.op, ok: true, elapsedMs: Math.round(performance.now() - stepStarted) };
+        if (stepMetadata?.locatorFallback) {
+          stepResult.locatorFallback = stepMetadata.locatorFallback;
+          locatorFallbacks.push({ index, strategy: stepMetadata.locatorFallback });
+        }
+        stepResults.push(stepResult);
       } catch (error) {
         stepResults.push({ index, op: step.op, ok: false, elapsedMs: Math.round(performance.now() - stepStarted) });
         throw error;
@@ -177,6 +183,7 @@ async function runContract(contract) {
       viewport: page.viewportSize(),
       outputs,
       observations,
+      ...(locatorFallbacks.length > 0 ? { locatorFallbacks } : {}),
       ...(screenshotPath ? { screenshot: screenshotPath } : {}),
       ...(evidence === "health" || evidence === "diag" ? { consoleErrors, pageErrors } : {}),
       ...((evidence === "health" || evidence === "diag") && requestFailures.length > 0 ? { requestFailures } : {}),
@@ -209,6 +216,7 @@ async function runContract(contract) {
       ...(stepResults.length > 0 ? { stepResults } : {}),
       ...(Object.keys(outputs).length > 0 ? { outputs } : {}),
       ...(observations.length > 0 ? { observations } : {}),
+      ...(locatorFallbacks.length > 0 ? { locatorFallbacks } : {}),
       ...(screenshotPath ? { screenshot: screenshotPath } : {}),
       ...(evidence === "health" || evidence === "diag" ? { consoleErrors, pageErrors } : {}),
       ...(requestFailures.length > 0 ? { requestFailures } : {}),

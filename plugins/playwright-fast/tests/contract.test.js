@@ -34,6 +34,9 @@ before(async () => {
         <title>Start</title>
         <button id="load">Load data</button>
         <input id="seed-value" value="seed">
+        <uni-button id="custom-save"><uni-view class="wd-button__text">保存</uni-view></uni-button>
+        <div id="custom-cancel" class="uni-modal__btn uni-modal__btn_default"><span class="uni-modal__btn-text">取消</span></div>
+        <div id="custom-ai" class="ai-btn"><span>AI 生成</span></div>
         <div class="account-row"><span>13900000000</span><span>Teacher</span><button onclick="window.open('/wrong')">模拟登录</button></div>
         <div class="account-row"><span>13900000000</span><span>Administrator</span><button onclick="window.open('/popup')">模拟登录</button></div>
         <button id="no-popup">No popup</button>
@@ -53,6 +56,9 @@ before(async () => {
             ])
               .then(() => document.querySelector('#load').dataset.done = 'true');
           };
+          document.querySelector('#custom-save').onclick = (event) => event.currentTarget.dataset.clicked = 'true';
+          document.querySelector('#custom-cancel').onclick = (event) => event.currentTarget.dataset.clicked = 'true';
+          document.querySelector('#custom-ai').onclick = (event) => event.currentTarget.dataset.clicked = 'true';
         </script>`);
       return;
     }
@@ -112,6 +118,12 @@ function flowContract(id) {
       { op: "click", target: { role: "button", name: "Load data" } },
       { op: "wait", target: { css: "#load[data-done=true]" } },
       { op: "readValue", target: { css: "#seed-value" }, as: "seedValue" },
+      { op: "click", target: { text: "保存" }, timeoutMs: 500 },
+      { op: "click", target: { role: "button", name: "取消" }, timeoutMs: 500 },
+      { op: "click", target: { role: "button", name: "AI 生成" }, timeoutMs: 500 },
+      { op: "readAttribute", target: { css: "#custom-save" }, attribute: "data-clicked", as: "customSaveClicked", timeoutMs: 500 },
+      { op: "readAttribute", target: { css: "#custom-cancel" }, attribute: "data-clicked", as: "customCancelClicked", timeoutMs: 500 },
+      { op: "readAttribute", target: { css: "#custom-ai" }, attribute: "data-clicked", as: "customAiClicked", timeoutMs: 500 },
       {
         op: "readText",
         target: { text: "13900000000", within: { css: ".account-row", hasText: ["13900000000", "Administrator"] } },
@@ -151,6 +163,14 @@ function assertFlowResult(result) {
   assert.equal(result.url, `${fixtureOrigin}/next`);
   assert.equal(result.outputs.phone, "13900000000");
   assert.equal(result.outputs.seedValue, "seed");
+  assert.equal(result.outputs.customSaveClicked, "true");
+  assert.equal(result.outputs.customCancelClicked, "true");
+  assert.equal(result.outputs.customAiClicked, "true");
+  assert.deepEqual(result.locatorFallbacks, [
+    { index: 3, strategy: "text-interactive-ancestor" },
+    { index: 4, strategy: "button-name-interactive-ancestor" },
+    { index: 5, strategy: "button-name-interactive-ancestor" },
+  ]);
   assert.equal(result.outputs.frameHeading, "Frame details");
   assert.deepEqual(result.outputs.frameEvaluation, { heading: "Frame details", seed: 7 });
   assert.equal(result.outputs.popupText, "Target account");
@@ -350,6 +370,10 @@ test("schema exposes scoped targets and validates new operations", () => {
   assert.throws(
     () => validateContract({ routes: [{ url: "**/api", json: {}, body: "duplicate" }] }),
     /exactly one of json, body, or abort/,
+  );
+  assert.throws(
+    () => validateContract({ routes: [{ url: "**/api", body: { ok: true } }] }),
+    /use routes\[0\]\.json for objects or arrays/,
   );
 });
 
