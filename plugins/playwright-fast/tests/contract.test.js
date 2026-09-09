@@ -222,7 +222,7 @@ function assertErgonomicResult(result) {
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.outputs.repeated, "filled");
   assert.equal(result.outputs.clicks, "2");
-  assert.deepEqual(result.outputs.uploadedFiles, ["README.md"]);
+  assert.deepEqual(result.outputs.uploadedFiles, ["runtime.json"]);
   assert.equal(result.outputs.boundedText.length, 32);
   assert.match(result.outputs.boundedText, /\.\.\.\[truncated\]$/);
   assert.deepEqual(result.locatorFallbacks, [
@@ -296,7 +296,7 @@ function ergonomicContract(id) {
       { op: "click", target: { placeholder: "Choose stage" } },
       { op: "click", target: { css: "#custom-combobox" } },
       { op: "readAttribute", target: { css: "#custom-select" }, attribute: "data-clicks", as: "clicks" },
-      { op: "setInputFiles", target: { css: "#upload" }, files: [path.resolve(pluginDir, "../..", "README.md")] },
+      { op: "setInputFiles", target: { css: "#upload" }, files: [path.resolve(pluginDir, "runtime.json")] },
       { op: "evaluate", expression: "Array.from(document.querySelector('#upload').files, file => file.name)", as: "uploadedFiles" },
       { op: "readText", target: { css: "body" }, maxChars: 32, as: "boundedText" },
       { op: "waitForTimeout", timeoutMs: 5 },
