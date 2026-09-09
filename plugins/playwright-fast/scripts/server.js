@@ -1,3 +1,4 @@
+const fs = require("node:fs");
 const readline = require("node:readline");
 const {
   DEFAULT_NAVIGATION_TIMEOUT_MS,
@@ -16,6 +17,12 @@ const {
 const SERVER_NAME = "playwright-fast";
 const { version: SERVER_VERSION } = require("../.codex-plugin/plugin.json");
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
+const PLAYWRIGHT_VERSION = process.env.PLAYWRIGHT_FAST_PLAYWRIGHT_VERSION;
+const CHROMIUM_REVISION = process.env.PLAYWRIGHT_FAST_CHROMIUM_REVISION;
+const CHROMIUM_VERSION = process.env.PLAYWRIGHT_FAST_CHROMIUM_VERSION;
+const BROWSER_EXECUTABLE_PATH = process.env.PLAYWRIGHT_FAST_BROWSER_EXECUTABLE_PATH;
+const BROWSER_SOURCE = process.env.PLAYWRIGHT_FAST_BROWSER_SOURCE;
+const INSTALL_COMMAND = process.env.PLAYWRIGHT_FAST_INSTALL_COMMAND;
 let chromium;
 
 function positiveInteger(value, fallback) {
@@ -88,7 +95,14 @@ class PersistentRuntime {
   async launch() {
     await this.dispose();
     if (!chromium) ({ chromium } = require("playwright"));
-    this.browser = await chromium.launch({ headless: true });
+    if (!BROWSER_EXECUTABLE_PATH || !fs.existsSync(BROWSER_EXECUTABLE_PATH)) {
+      throw new Error([
+        `playwright-fast browser executable is unavailable for Playwright ${PLAYWRIGHT_VERSION}, Chromium revision ${CHROMIUM_REVISION} (${CHROMIUM_VERSION})`,
+        `Expected executable: ${BROWSER_EXECUTABLE_PATH || "not resolved"}`,
+        `Run: ${INSTALL_COMMAND || "the playwright-fast runtime installer"}`,
+      ].join("\n"));
+    }
+    this.browser = await chromium.launch({ headless: true, executablePath: BROWSER_EXECUTABLE_PATH });
     await this.createContext();
     this.startedAt = Date.now();
     this.launches += 1;
@@ -139,6 +153,11 @@ class PersistentRuntime {
       url: warm ? this.page.url() : null,
       viewport: warm ? this.page.viewportSize() : null,
       version: SERVER_VERSION,
+      playwrightVersion: PLAYWRIGHT_VERSION,
+      chromiumRevision: CHROMIUM_REVISION,
+      chromiumVersion: CHROMIUM_VERSION,
+      browserSource: BROWSER_SOURCE,
+      browserExecutablePath: BROWSER_EXECUTABLE_PATH,
       launches: this.launches,
       resets: this.resets,
       runs: this.runs,
@@ -201,7 +220,10 @@ class PersistentRuntime {
       }
       if (contract.url) {
         phase = "navigation";
-        await this.page.goto(contract.url, { waitUntil: contract.waitUntil || "domcontentloaded" });
+        await flow.navigate(contract.url, {
+          waitUntil: contract.waitUntil,
+          timeoutMs: this.defaultNavigationTimeoutMs,
+        });
       }
       if (contract.ready) {
         phase = "ready";
@@ -322,7 +344,7 @@ const tools = [
   },
   {
     name: "status",
-    description: "Return compact runtime warmth, TTL, URL, and counters without extending the TTL.",
+    description: "Return compact runtime warmth, versions, browser source, URL, and counters without extending the TTL.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
 ];

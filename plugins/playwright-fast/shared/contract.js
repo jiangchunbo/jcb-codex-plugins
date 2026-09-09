@@ -7,9 +7,9 @@ const DEFAULT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const MAX_OPERATION_TIMEOUT_MS = 10_000;
 const MAX_CONTRACT_BUDGET_MS = 45_000;
 const supportedSteps = new Set([
-  "setContent", "goto", "click", "fill", "clear", "type", "press", "select", "check",
+  "setContent", "goto", "reload", "click", "fill", "clear", "type", "press", "select", "setInputFiles", "check",
   "uncheck", "hover", "focus", "wait", "readText", "readAllText", "readAttribute",
-  "readValue", "readBoundingBox", "readComputedStyle", "evaluate",
+  "readValue", "readBoundingBox", "readComputedStyle", "evaluate", "waitForTimeout",
 ]);
 const selectorKeys = ["role", "text", "label", "placeholder", "testId", "css"];
 
@@ -44,6 +44,22 @@ function assertExpected(condition, message) {
 
 function compactError(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function effectiveStepTarget(step) {
+  if (!step?.target || (step.first === undefined && step.nth === undefined)) return step?.target;
+  return {
+    ...step.target,
+    ...(step.target.first === undefined && step.first !== undefined ? { first: step.first } : {}),
+    ...(step.target.nth === undefined && step.nth !== undefined ? { nth: step.nth } : {}),
+  };
+}
+
+function truncateText(value, maxChars) {
+  if (typeof value !== "string" || maxChars === undefined || value.length <= maxChars) return value;
+  const suffix = "...[truncated]";
+  if (maxChars <= suffix.length) return suffix.slice(0, maxChars);
+  return `${value.slice(0, maxChars - suffix.length)}${suffix}`;
 }
 
 function assertBoundedTimeout(value, label, { allowZero = false } = {}) {
@@ -100,10 +116,7 @@ function validateExpectation(expectation, label) {
 
 function expectationBudgetMs(expectation, defaultTimeoutMs) {
   if (["url", "urlIncludes"].some((key) => expectation[key] !== undefined)) return 0;
-  if (["title", "titleIncludes"].some((key) => expectation[key] !== undefined)) return defaultTimeoutMs;
-  const checks = ["state", "text", "contains", "value", "count", "attribute", "computedStyle", "box"]
-    .filter((key) => expectation[key] !== undefined).length;
-  return Math.max(1, checks) * defaultTimeoutMs;
+  return defaultTimeoutMs;
 }
 
 function estimateContractBudgetMs(contract) {
@@ -114,7 +127,9 @@ function estimateContractBudgetMs(contract) {
   for (const step of contract.steps || []) {
     if (step.op === "wait" && step.ms !== undefined) {
       budgetMs += step.ms;
-    } else if (step.op === "goto" || step.op === "setContent") {
+    } else if (step.op === "waitForTimeout") {
+      budgetMs += step.ms ?? step.timeoutMs ?? defaultTimeoutMs;
+    } else if (step.op === "goto" || step.op === "reload" || step.op === "setContent") {
       budgetMs += step.timeoutMs || navigationTimeoutMs;
     } else if (step.op === "click" && step.popup === "switch") {
       budgetMs += step.timeoutMs ? 3 * step.timeoutMs : 2 * defaultTimeoutMs + navigationTimeoutMs;
@@ -125,10 +140,10 @@ function estimateContractBudgetMs(contract) {
   for (const expectation of contract.expect || []) {
     budgetMs += expectationBudgetMs(expectation, defaultTimeoutMs);
   }
-  for (const capture of contract.captureResponses || []) {
-    if (capture.required !== false) budgetMs += capture.timeoutMs || defaultTimeoutMs;
-  }
-  return budgetMs;
+  const responseBudgetMs = Math.max(0, ...(contract.captureResponses || [])
+    .filter((capture) => capture.required !== false)
+    .map((capture) => capture.timeoutMs || defaultTimeoutMs));
+  return Math.max(budgetMs, responseBudgetMs);
 }
 
 function resolveViewport(contract, currentViewport) {
@@ -219,14 +234,20 @@ function validateContract(contract) {
     assertContract(step && typeof step === "object", `${label} must be an object`);
     assertContract(supportedSteps.has(step.op), `${label} has unsupported operation: ${step.op}`);
     if (step.timeoutMs !== undefined) assertBoundedTimeout(step.timeoutMs, `${label}.timeoutMs`);
+    if (step.ms !== undefined) assertBoundedTimeout(step.ms, `${label}.ms`, { allowZero: true });
+    if (step.maxChars !== undefined) {
+      assertContract(Number.isInteger(step.maxChars) && step.maxChars > 0, `${label}.maxChars must be a positive integer`);
+    }
+    if (step.first !== undefined) assertContract(typeof step.first === "boolean", `${label}.first must be a boolean`);
+    if (step.nth !== undefined) assertContract(Number.isInteger(step.nth) && step.nth >= 0, `${label}.nth must be a non-negative integer`);
     if (step.waitUntil !== undefined) assertContract(supportedWaitUntil.has(step.waitUntil), `${label}.waitUntil is unsupported`);
     if (step.popup !== undefined) {
       assertContract(step.op === "click", `${label}.popup is only supported for click`);
       assertContract(step.popup === "switch", `${label}.popup must be switch`);
     }
     if (step.waitUntil !== undefined) {
-      const supportsWaitUntil = step.op === "setContent" || step.op === "goto" || (step.op === "click" && step.popup === "switch");
-      assertContract(supportsWaitUntil, `${label}.waitUntil requires setContent, goto, or a popup click`);
+      const supportsWaitUntil = step.op === "setContent" || step.op === "goto" || step.op === "reload" || (step.op === "click" && step.popup === "switch");
+      assertContract(supportsWaitUntil, `${label}.waitUntil requires setContent, goto, reload, or a popup click`);
     }
     if (step.frame !== undefined) assertContract(step.op === "evaluate", `${label}.frame is only supported directly on evaluate; other steps use target.frame`);
     if (step.as !== undefined) assertContract(typeof step.as === "string" && step.as.length > 0, `${label}.as must be a non-empty string`);
@@ -240,20 +261,37 @@ function validateContract(contract) {
       assertContract(typeof step.url === "string" && step.url.length > 0, `${label}.url is required`);
       return;
     }
+    if (step.op === "reload") return;
     if (step.op === "evaluate") {
       assertContract(typeof step.expression === "string" && step.expression.length > 0, `${label}.expression is required`);
       if (step.frame !== undefined) validateFrame(step.frame, `${label}.frame`);
       return;
     }
+    if (step.op === "waitForTimeout") {
+      assertContract(step.ms !== undefined || step.timeoutMs !== undefined, `${label} requires ms or timeoutMs`);
+      assertContract(step.target === undefined, `${label} does not use target`);
+      return;
+    }
     if (step.op === "wait" && step.ms !== undefined) {
-      assertBoundedTimeout(step.ms, `${label}.ms`, { allowZero: true });
       assertContract(step.target === undefined, `${label} cannot define both ms and target`);
       return;
     }
-    validateTarget(step.target, label);
-    if (step.op === "fill" || step.op === "type") assertContract(typeof step.value === "string", `${label}.value must be a string for ${step.op}`);
+    validateTarget(effectiveStepTarget(step), label);
+    if (step.op === "fill" || step.op === "type") {
+      assertContract(typeof (step.value ?? step.text) === "string", `${label}.value or ${label}.text must be a string for ${step.op}`);
+    }
     if (step.op === "press") assertContract(typeof step.key === "string" && step.key.length > 0, `${label}.key must be a non-empty string`);
     if (step.op === "select") assertContract(step.value !== undefined, `${label}.value is required for select`);
+    if (step.op === "setInputFiles") {
+      const fileFields = ["files", "paths"].filter((key) => step[key] !== undefined);
+      assertContract(fileFields.length === 1, `${label} must define exactly one of files or paths for setInputFiles`);
+      const files = step[fileFields[0]];
+      assertContract(
+        Array.isArray(files) && files.length > 0 && files.every((file) => typeof file === "string" && file.length > 0),
+        `${label}.${fileFields[0]} must be a non-empty string array`,
+      );
+    }
+    if (step.maxChars !== undefined) assertContract(["readText", "readAllText"].includes(step.op), `${label}.maxChars is only supported for readText and readAllText`);
     if (step.op === "readAllText" && step.timeoutMs !== undefined) assertContract(false, `${label}.timeoutMs is not supported for readAllText because it does not wait for a locator`);
     if (step.op === "readAttribute") assertContract(typeof step.attribute === "string" && step.attribute.length > 0, `${label}.attribute must be a non-empty string`);
     if (step.op === "readComputedStyle") assertContract(Array.isArray(step.properties) && step.properties.length > 0 && step.properties.every((property) => typeof property === "string" && property.length > 0), `${label}.properties must be a non-empty string array`);
@@ -430,13 +468,39 @@ class FlowRuntime {
     return locator;
   }
 
-  async resolveClickLocator(target, locator) {
-    if (target.text === undefined && !(target.role === "button" && target.name !== undefined)) {
-      return { locator };
+  async resolveUniqueVisibleLocator(locator) {
+    const count = await locator.count();
+    if (count <= 1) return { locator };
+    const visibleIndexes = await locator.evaluateAll((elements) => elements.flatMap((element, index) => {
+      const box = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none"
+        ? [index]
+        : [];
+    }));
+    if (visibleIndexes.length !== 1) return { locator };
+    return { locator: locator.nth(visibleIndexes[0]), locatorFallback: "unique-visible-match" };
+  }
+
+  async resolveClickLocator(target, locator, locatorFallback) {
+    let candidate = locator;
+    let strategy = locatorFallback;
+
+    if (await candidate.count() === 0 && target.placeholder !== undefined) {
+      candidate = this.locate({
+        text: target.placeholder,
+        exact: target.exact,
+        first: target.first,
+        nth: target.nth,
+        hasText: target.hasText,
+        within: target.within,
+        frame: target.frame,
+      });
+      const visible = await this.resolveUniqueVisibleLocator(candidate);
+      candidate = visible.locator;
+      strategy = "placeholder-text";
     }
 
-    let candidate = locator;
-    let strategy = "text-interactive-ancestor";
     if (await candidate.count() === 0 && target.role === "button") {
       candidate = this.locate({
         text: target.name,
@@ -449,7 +513,34 @@ class FlowRuntime {
       });
       strategy = "button-name-interactive-ancestor";
     }
+    const visible = await this.resolveUniqueVisibleLocator(candidate);
+    candidate = visible.locator;
+    strategy = strategy || visible.locatorFallback;
     if (await candidate.count() !== 1) return { locator };
+
+    if (target.text === undefined && !(target.role === "button" && target.name !== undefined)) {
+      const ancestorDistance = await candidate.evaluate((element) => {
+        const isReadonlyControl = element.matches("input") && element.readOnly;
+        if (!isReadonlyControl) return -1;
+        let current = element.parentElement;
+        let distance = 1;
+        while (current && distance <= 5) {
+          const role = current.getAttribute("role");
+          const className = String(current.getAttribute("class") || "");
+          if (role === "combobox" || /(?:^|\s|[-_])(select|cascader|picker|combobox)(?:\s|[-_]|$)/i.test(className)) return distance;
+          current = current.parentElement;
+          distance += 1;
+        }
+        return -1;
+      });
+      if (ancestorDistance > 0) {
+        return {
+          locator: candidate.locator(`xpath=ancestor-or-self::*[${ancestorDistance + 1}]`),
+          locatorFallback: "readonly-control-ancestor",
+        };
+      }
+      return { locator: candidate, ...(strategy ? { locatorFallback: strategy } : {}) };
+    }
 
     const ancestorDistance = await candidate.evaluate((element) => {
       const isInteractive = (node) => {
@@ -473,12 +564,15 @@ class FlowRuntime {
       }
       return -1;
     });
-    if (ancestorDistance === 0) return { locator: candidate };
-    if (ancestorDistance < 0) return { locator };
+    if (ancestorDistance === 0) return { locator: candidate, ...(strategy ? { locatorFallback: strategy } : {}) };
+    if (ancestorDistance < 0) return { locator: candidate, ...(strategy ? { locatorFallback: strategy } : {}) };
 
     const ancestor = candidate.locator(`xpath=ancestor-or-self::*[${ancestorDistance + 1}]`);
-    if (await ancestor.count() !== 1) return { locator };
-    return { locator: ancestor, locatorFallback: strategy };
+    if (await ancestor.count() !== 1) return { locator: candidate, ...(strategy ? { locatorFallback: strategy } : {}) };
+    return {
+      locator: ancestor,
+      locatorFallback: strategy || "text-interactive-ancestor",
+    };
   }
 
   async resolveEvaluationTarget(frame) {
@@ -494,13 +588,24 @@ class FlowRuntime {
     return contentFrame;
   }
 
+  async navigate(url, { waitUntil = "domcontentloaded", timeoutMs } = {}) {
+    const response = await this.page.goto(url, { waitUntil, ...(timeoutMs ? { timeout: timeoutMs } : {}) });
+    if (response === null) {
+      await this.page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    }
+  }
+
   async runStep(step, outputs) {
     if (step.op === "setContent") {
       await this.page.setContent(step.html, { waitUntil: step.waitUntil || "domcontentloaded", ...(step.timeoutMs ? { timeout: step.timeoutMs } : {}) });
       return;
     }
     if (step.op === "goto") {
-      await this.page.goto(step.url, { waitUntil: step.waitUntil || "domcontentloaded", ...(step.timeoutMs ? { timeout: step.timeoutMs } : {}) });
+      await this.navigate(step.url, { waitUntil: step.waitUntil, timeoutMs: step.timeoutMs });
+      return;
+    }
+    if (step.op === "reload") {
+      await this.page.reload({ waitUntil: step.waitUntil || "domcontentloaded", ...(step.timeoutMs ? { timeout: step.timeoutMs } : {}) });
       return;
     }
     if (step.op === "evaluate") {
@@ -521,16 +626,24 @@ class FlowRuntime {
       outputs[step.as || "evaluation"] = value;
       return;
     }
-    if (step.op === "wait" && step.ms !== undefined) {
-      await this.page.waitForTimeout(step.ms);
+    if ((step.op === "wait" && step.ms !== undefined) || step.op === "waitForTimeout") {
+      await this.page.waitForTimeout(step.ms ?? step.timeoutMs);
       return;
     }
 
-    const locator = this.locate(step.target);
+    const target = effectiveStepTarget(step);
+    const locator = this.locate(target);
     const actionOptions = step.timeoutMs ? { timeout: step.timeoutMs } : undefined;
+    const canPreferVisible = step.op !== "readAllText" && !(step.op === "wait" && ["hidden", "detached"].includes(step.state));
+    const initiallyResolved = canPreferVisible
+      ? await this.resolveUniqueVisibleLocator(locator)
+      : { locator };
+    const resolvedLocator = initiallyResolved.locator;
+    let locatorFallback = initiallyResolved.locatorFallback;
     switch (step.op) {
       case "click": {
-        const resolved = await this.resolveClickLocator(step.target, locator);
+        const resolved = await this.resolveClickLocator(target, resolvedLocator, locatorFallback);
+        locatorFallback = resolved.locatorFallback;
         if (step.popup === "switch") {
           let popupWaitError;
           const popupPromise = this.context.waitForEvent("page", {
@@ -545,31 +658,41 @@ class FlowRuntime {
           await this.switchToPage(popup);
           await popup.waitForLoadState(step.waitUntil || "domcontentloaded", actionOptions);
         } else await resolved.locator.click(actionOptions);
-        return resolved.locatorFallback ? { locatorFallback: resolved.locatorFallback } : undefined;
+        break;
       }
-      case "fill": await locator.fill(step.value, actionOptions); break;
-      case "clear": await locator.clear(actionOptions); break;
-      case "type": await locator.pressSequentially(step.value, { delay: step.delay || 0, ...actionOptions }); break;
-      case "press": await locator.press(step.key, actionOptions); break;
-      case "select": await locator.selectOption(step.value, actionOptions); break;
-      case "check": await locator.check(actionOptions); break;
-      case "uncheck": await locator.uncheck(actionOptions); break;
-      case "hover": await locator.hover(actionOptions); break;
-      case "focus": await locator.focus(actionOptions); break;
-      case "wait": await locator.waitFor({ state: step.state || "visible", ...actionOptions }); break;
-      case "readText": outputs[step.as || "text"] = await locator.textContent(actionOptions); break;
-      case "readAllText": outputs[step.as || "texts"] = await locator.allTextContents(); break;
-      case "readAttribute": outputs[step.as || step.attribute] = await locator.getAttribute(step.attribute, actionOptions); break;
-      case "readValue": outputs[step.as || "value"] = await locator.inputValue(actionOptions); break;
+      case "fill": await resolvedLocator.fill(step.value ?? step.text, actionOptions); break;
+      case "clear": await resolvedLocator.clear(actionOptions); break;
+      case "type": await resolvedLocator.pressSequentially(step.value ?? step.text, { delay: step.delay || 0, ...actionOptions }); break;
+      case "press": await resolvedLocator.press(step.key, actionOptions); break;
+      case "select": await resolvedLocator.selectOption(step.value, actionOptions); break;
+      case "setInputFiles": await resolvedLocator.setInputFiles(step.files ?? step.paths, actionOptions); break;
+      case "check": await resolvedLocator.check(actionOptions); break;
+      case "uncheck": await resolvedLocator.uncheck(actionOptions); break;
+      case "hover": await resolvedLocator.hover(actionOptions); break;
+      case "focus": await resolvedLocator.focus(actionOptions); break;
+      case "wait": await resolvedLocator.waitFor({ state: step.state || "visible", ...actionOptions }); break;
+      case "readText": {
+        const value = await resolvedLocator.textContent(actionOptions);
+        outputs[step.as || "text"] = truncateText(value, step.maxChars);
+        break;
+      }
+      case "readAllText": {
+        const values = await resolvedLocator.allTextContents();
+        outputs[step.as || "texts"] = values.map((value) => truncateText(value, step.maxChars));
+        break;
+      }
+      case "readAttribute": outputs[step.as || step.attribute] = await resolvedLocator.getAttribute(step.attribute, actionOptions); break;
+      case "readValue": outputs[step.as || "value"] = await resolvedLocator.inputValue(actionOptions); break;
       case "readBoundingBox": {
-        const box = await locator.boundingBox(actionOptions);
+        const box = await resolvedLocator.boundingBox(actionOptions);
         assertExpected(box, "Target has no visible bounding box");
         outputs[step.as || "box"] = withBoxEdges(box);
         break;
       }
-      case "readComputedStyle": outputs[step.as || "computedStyle"] = await readStyles(locator, step.properties, actionOptions); break;
+      case "readComputedStyle": outputs[step.as || "computedStyle"] = await readStyles(resolvedLocator, step.properties, actionOptions); break;
       default: throw new ContractError(`Unsupported step operation: ${step.op}`);
     }
+    return locatorFallback ? { locatorFallback } : undefined;
   }
 
   async checkExpectation(expectation) {
@@ -692,18 +815,21 @@ class FlowRuntime {
   }
 
   installResponseCaptures(contract, outputs, defaultTimeoutMs) {
+    const installedAt = Date.now();
     const states = (contract.captureResponses || []).map((rule) => {
       let notify;
+      const normalizedRule = {
+        body: "json",
+        count: 1,
+        maxBodyBytes: 1_000_000,
+        required: true,
+        ...rule,
+        method: rule.method ? rule.method.toUpperCase() : undefined,
+        matcher: globToRegExp(rule.url),
+      };
       return {
-        rule: {
-          body: "json",
-          count: 1,
-          maxBodyBytes: 1_000_000,
-          required: true,
-          ...rule,
-          method: rule.method ? rule.method.toUpperCase() : undefined,
-          matcher: globToRegExp(rule.url),
-        },
+        rule: normalizedRule,
+        deadline: installedAt + (normalizedRule.timeoutMs || defaultTimeoutMs),
         results: [],
         inFlight: 0,
         error: null,
@@ -763,14 +889,17 @@ class FlowRuntime {
 
     return {
       wait: async () => {
-        for (const state of states) {
-          const timeoutMs = state.rule.timeoutMs || defaultTimeoutMs;
-          const deadline = Date.now() + timeoutMs;
+        const waitForState = async (state) => {
           while (state.rule.required && state.results.length < state.rule.count && !state.error) {
-            const remaining = deadline - Date.now();
-            if (remaining <= 0) throw new Error(`Timed out waiting for ${state.rule.count} response(s) as ${state.rule.as}`);
+            const remaining = state.deadline - Date.now();
+            if (remaining <= 0) {
+              throw new Error(`Timed out after ${state.rule.timeoutMs || defaultTimeoutMs}ms waiting for ${state.rule.count} response(s) as ${state.rule.as} (received ${state.results.length})`);
+            }
             await new Promise((resolve, reject) => {
-              const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${state.rule.count} response(s) as ${state.rule.as}`)), remaining);
+              const timer = setTimeout(
+                () => reject(new Error(`Timed out after ${state.rule.timeoutMs || defaultTimeoutMs}ms waiting for ${state.rule.count} response(s) as ${state.rule.as} (received ${state.results.length})`)),
+                remaining,
+              );
               state.changed.then(() => {
                 clearTimeout(timer);
                 resolve();
@@ -778,8 +907,9 @@ class FlowRuntime {
             });
           }
           if (state.error) throw state.error;
-        }
-        await Promise.all(pending);
+        };
+        await Promise.all(states.map(waitForState));
+        await Promise.all([...pending]);
         for (const state of states) {
           if (state.error) throw state.error;
           outputs[state.rule.as] = state.rule.count === 1 ? state.results[0] ?? null : state.results;
@@ -792,19 +922,18 @@ class FlowRuntime {
 
 const frameSchema = {
   type: "object",
-  description: "Select one iframe by exact name, partial URL, or iframe CSS locator.",
+  description: "Select one iframe by exactly one of name, urlIncludes, or css.",
   properties: {
     name: { type: "string", minLength: 1 },
     urlIncludes: { type: "string", minLength: 1 },
     css: { type: "string", minLength: 1 },
   },
-  oneOf: ["name", "urlIncludes", "css"].map((key) => ({ required: [key] })),
   additionalProperties: false,
 };
 
 const targetSchema = {
   type: "object",
-  description: "One semantic/CSS locator, optionally scoped to an ancestor with within and/or to an iframe with frame.",
+  description: "Define exactly one of role, text, label, placeholder, testId, or css; optionally scope with within/frame or disambiguate with first/nth.",
   properties: {
     role: { type: "string", minLength: 1 },
     name: { type: "string", minLength: 1 },
@@ -826,28 +955,28 @@ const targetSchema = {
     within: { $ref: "#/$defs/target" },
     frame: { $ref: "#/$defs/frame" },
   },
-  oneOf: selectorKeys.map((key) => ({ required: [key] })),
   additionalProperties: false,
 };
 
-const basicLocatorStepOps = [
-  "click", "clear", "check", "uncheck", "hover", "focus",
-  "readText", "readAllText", "readValue", "readBoundingBox",
-];
-
 const stepSchema = {
   type: "object",
-  description: "A navigation, interaction, read, or evaluate operation. goto/setContent/evaluate do not use target.",
+  description: "One operation. fill/type accept value or text; wait accepts target or ms; waitForTimeout accepts ms or timeoutMs; setInputFiles accepts files or paths; goto/reload/setContent/evaluate do not use target.",
   properties: {
     op: { type: "string", enum: [...supportedSteps] },
-    target: { $ref: "#/$defs/target" },
+    target: targetSchema,
     url: { type: "string", minLength: 1, description: "Destination for goto." },
     html: { type: "string", description: "HTML for setContent." },
     value: {},
+    text: { type: "string", description: "Alias for value on fill/type." },
+    files: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, description: "Absolute file paths for setInputFiles." },
+    paths: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, description: "Alias for files on setInputFiles." },
     key: { type: "string", minLength: 1 },
     delay: { type: "number", minimum: 0 },
     state: { type: "string", enum: ["attached", "detached", "visible", "hidden"] },
-    ms: { type: "integer", minimum: 0 },
+    ms: { type: "integer", minimum: 0, maximum: MAX_OPERATION_TIMEOUT_MS },
+    first: { type: "boolean", description: "Shorthand for target.first." },
+    nth: { type: "integer", minimum: 0, description: "Shorthand for target.nth." },
+    maxChars: { type: "integer", minimum: 1, description: "Bound each readText/readAllText string and mark truncation." },
     attribute: { type: "string", minLength: 1 },
     properties: { type: "array", minItems: 1, items: { type: "string", minLength: 1 } },
     as: { type: "string", minLength: 1, description: "Output key for reads/evaluate." },
@@ -856,56 +985,15 @@ const stepSchema = {
     popup: { type: "string", enum: ["switch"], description: "On click, atomically wait for and switch to the new page." },
     expression: { type: "string", minLength: 1, description: "Page expression or function expression for evaluate; optional arg is available and passed to functions." },
     arg: {},
-    frame: { $ref: "#/$defs/frame" },
+    frame: frameSchema,
   },
   required: ["op"],
-  oneOf: [
-    { properties: { op: { const: "setContent" } }, required: ["html"] },
-    { properties: { op: { const: "goto" } }, required: ["url"] },
-    { properties: { op: { const: "evaluate" } }, required: ["expression"] },
-    {
-      properties: { op: { const: "wait" } },
-      oneOf: [
-        { required: ["target"], not: { required: ["ms"] } },
-        { required: ["ms"], not: { required: ["target"] } },
-      ],
-    },
-    { properties: { op: { const: "readAttribute" } }, required: ["target", "attribute"] },
-    { properties: { op: { const: "readComputedStyle" } }, required: ["target", "properties"] },
-    { properties: { op: { const: "press" } }, required: ["target", "key"] },
-    { properties: { op: { const: "select" } }, required: ["target", "value"] },
-    { properties: { op: { enum: ["fill", "type"] }, value: { type: "string" } }, required: ["target", "value"] },
-    { properties: { op: { enum: basicLocatorStepOps } }, required: ["target"] },
-  ],
-  allOf: [
-    {
-      if: { required: ["popup"] },
-      then: { properties: { op: { const: "click" } } },
-    },
-    {
-      if: { required: ["frame"] },
-      then: { properties: { op: { const: "evaluate" } } },
-    },
-    {
-      if: { required: ["waitUntil"] },
-      then: {
-        anyOf: [
-          { properties: { op: { enum: ["setContent", "goto"] } } },
-          { properties: { op: { const: "click" } }, required: ["popup"] },
-        ],
-      },
-    },
-    {
-      if: { properties: { op: { const: "readAllText" } }, required: ["op"] },
-      then: { not: { required: ["timeoutMs"] } },
-    },
-  ],
   additionalProperties: false,
 };
 
 const routeSchema = {
   type: "object",
-  description: "One first-match request rule. Define exactly one response action: json, body, or abort.",
+  description: "One first-match request rule. Define url and exactly one response action: json, body, or abort.",
   properties: {
     url: { type: "string", minLength: 1, description: "URL glob." },
     method: { type: "string", minLength: 1 },
@@ -923,14 +1011,13 @@ const routeSchema = {
     contentType: { type: "string", minLength: 1 },
   },
   required: ["url"],
-  oneOf: ["json", "body", "abort"].map((key) => ({ required: [key] })),
   additionalProperties: false,
 };
 
 const expectationSchema = {
   type: "object",
   properties: {
-    target: { $ref: "#/$defs/target" },
+    target: targetSchema,
     state: { type: "string", enum: ["attached", "detached", "visible", "hidden"] },
     text: {}, contains: {}, value: {}, count: { type: "integer", minimum: 0 },
     attribute: { type: "object", properties: { name: { type: "string" }, value: {} }, required: ["name", "value"], additionalProperties: false },
@@ -939,14 +1026,14 @@ const expectationSchema = {
     url: { type: "string" }, urlIncludes: { type: "string" },
     title: { type: "string" }, titleIncludes: { type: "string" },
   },
-  oneOf: ["target", "url", "urlIncludes", "title", "titleIncludes"].map((key) => ({ required: [key] })),
+  description: "Define exactly one page field (url/urlIncludes/title/titleIncludes) or one target plus its expected state/value.",
   additionalProperties: false,
 };
 
 const contractSchema = {
   type: "object",
   description: `One bounded browser flow. Explicit operation timeouts are capped at ${MAX_OPERATION_TIMEOUT_MS}ms and the estimated combined budget at ${MAX_CONTRACT_BUDGET_MS}ms.`,
-  $defs: { frame: frameSchema, target: targetSchema, route: routeSchema, step: stepSchema, expectation: expectationSchema },
+  $defs: { frame: frameSchema, target: targetSchema },
   properties: {
     id: { type: "string", description: "Short flow identifier." },
     url: { type: "string", minLength: 1, description: "Optional entry URL." },
@@ -957,11 +1044,11 @@ const contractSchema = {
       required: ["width", "height"],
       additionalProperties: false,
     },
-    steps: { type: "array", items: { $ref: "#/$defs/step" } },
-    expect: { type: "array", items: { $ref: "#/$defs/expectation" } },
+    steps: { type: "array", items: stepSchema },
+    expect: { type: "array", items: expectationSchema },
     ready: {
+      ...expectationSchema,
       description: "Expectation checked after top-level navigation. Locator readiness must nest the locator under target, for example { target: { text: 'Ready' }, state: 'visible' }.",
-      allOf: [{ $ref: "#/$defs/expectation" }],
     },
     evidence: { type: "string", enum: [...supportedEvidence] },
     timeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS },
@@ -976,7 +1063,7 @@ const contractSchema = {
     routes: {
       type: "array",
       description: "First-match request mocks scoped to this run and removed before it returns. In URL globs, ? matches exactly one character; use a trailing * when a query string is optional.",
-      items: { $ref: "#/$defs/route" },
+      items: routeSchema,
     },
     captureResponses: {
       type: "array",

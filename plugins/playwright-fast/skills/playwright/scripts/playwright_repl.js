@@ -3,7 +3,10 @@ const { chromium } = require("playwright");
 const startedAt = performance.now();
 
 async function main() {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_FAST_BROWSER_EXECUTABLE_PATH,
+  });
   const context = await browser.newContext();
   const page = await context.newPage();
   let closing = false;

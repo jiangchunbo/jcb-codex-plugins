@@ -7,6 +7,8 @@ repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 codex_home="${CODEX_HOME:-${HOME}/.codex}"
 skills_dir="${codex_home}/skills"
 
+"$repo_dir/plugins/playwright-fast/scripts/install-runtime.sh"
+
 if codex plugin marketplace list --json | python3 -c '
 import json
 import sys
@@ -39,4 +41,4 @@ if [[ -d "$repo_dir/skills" ]]; then
   done
 fi
 
-echo "Installed playwright-fast and linked available standalone skills. Start a new Codex task to load updated skills and MCP tools."
+echo "Installed playwright-fast with its pinned browser runtime and linked available standalone skills. Start a new Codex task to load updated skills and MCP tools."

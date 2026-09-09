@@ -130,7 +130,10 @@ async function runContract(contract) {
     }
     if (contract.url) {
       phase = "navigation";
-      await page.goto(contract.url, { waitUntil: contract.waitUntil || "domcontentloaded" });
+      await flow.navigate(contract.url, {
+        waitUntil: contract.waitUntil,
+        timeoutMs: defaultNavigationTimeoutMs,
+      });
     }
     if (contract.ready) {
       phase = "ready";
@@ -235,7 +238,10 @@ async function close() {
 }
 
 async function main() {
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_FAST_BROWSER_EXECUTABLE_PATH,
+  });
   await createRuntime();
   emit({ type: "ready", startupMs: Math.round(performance.now() - startedAt) });
 

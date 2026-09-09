@@ -34,6 +34,11 @@ Use the MCP tools as follows:
 - `reset`: discard runtime state only after corruption, explicit isolation, or a user request.
 - `status`: inspect warmth and the 30-minute idle TTL only when that state matters.
 
+The repository installer provisions the plugin's pinned Playwright and Chromium runtime. Do not
+repair a missing browser with an unversioned `npx playwright install`; rerun the repository
+installer so the library and browser revision stay aligned. `PLAYWRIGHT_EXECUTABLE_PATH` is an
+explicit system-browser override, not the default launch path.
+
 If MCP `run` is unavailable or lacks a required capability, read
 [references/fallbacks.md](references/fallbacks.md) and select the first viable fallback. Do not load
 that reference for normal MCP work.
@@ -44,11 +49,18 @@ Prefer semantic targets in this order: `role` with `name`, `label`, `placeholder
 scoped `css`. Scope repeated controls with `within`; add target-level `frame`, `first`, or `nth`
 when required. Use a click with `"popup":"switch"` to adopt a new page atomically.
 
-Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, and `evaluate`
-only when declarative operations cannot express the action. Use `readValue` for form-control values.
+Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, `reload` to refresh
+the current page, `setInputFiles` with absolute paths for uploads, and `evaluate` only when
+declarative operations cannot express the action. Use `readValue` for form-control values and
+`maxChars` on text reads when the page can be large.
 Use `cors:true` for
 credential-compatible route responses and OPTIONS handling. Claim that a preflight occurred only
 when captured route calls contain `cors-preflight`.
+
+Keep common action shapes simple: `fill` and `type` use `value`; `wait` uses either `target` or
+`ms`. The runtime also accepts the common `text` alias for fill/type, `waitForTimeout` with
+`timeoutMs`, step-level `first`/`nth`, and `paths` as an alias for `setInputFiles.files`, so a
+familiar Playwright-shaped contract does not need a repair call.
 
 Check these contract shapes before running:
 
@@ -56,6 +68,8 @@ Check these contract shapes before running:
   `"ready":{"target":{"text":"Ready"},"state":"visible"}`.
 - Top-level `ready` runs after top-level navigation and before every step. When `setContent` or a
   step-level `goto` creates the target, add a later `wait` step instead.
+- Same-document navigation, including Hash Router changes, automatically yields for two animation
+  frames. Still use a later target wait when the application performs additional asynchronous work.
 - Treat `routes` and `blockResourceTypes` as call-scoped. Repeat required rules in every contract
   that navigates, reloads, or fetches mocked data.
 - Use `json` for structured mock responses and `body` only for text, for example
@@ -63,10 +77,16 @@ Check these contract shapes before running:
 - In URL globs, `?` matches one character. Use `**/toc/orders*` to cover the path both with and
   without a query string.
 - Use per-step `timeoutMs` only for a known operation that needs a different ceiling.
+- Required response captures share the run clock and wait concurrently. Their timeouts do not add
+  serially to the contract budget.
 - Text and button-name clicks automatically use a unique nearest interactive ancestor, including
   `uni-button`, uni-app modal controls, and conventional `*-btn` elements. The result reports this
   under `locatorFallbacks`. When more than one candidate exists, target the component explicitly,
   for example `{"css":"uni-button","hasText":"保存"}`, and scope it with `within` when needed.
+- When an action or single-value read has exactly one visible match, the runtime ignores its hidden
+  duplicates. Clicks also fall back from a custom control's rendered placeholder text and from a
+  covered read-only combobox input to its control container; these non-force fallbacks are reported
+  in `locatorFallbacks`.
 
 New-document flows default to a `1440x900` viewport. Continuation contracts without a top-level
 `url`, `goto`, or `setContent` preserve the current viewport, including targeted diagnostics. The

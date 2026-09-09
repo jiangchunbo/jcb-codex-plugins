@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -17,6 +18,7 @@ const {
 } = require("../shared/contract");
 
 const pluginDir = path.resolve(__dirname, "..");
+const runtimeSpec = JSON.parse(fs.readFileSync(path.join(pluginDir, "runtime.json"), "utf8"));
 const credentialedMockUrl = "http://127.0.0.1:1/api/credentialed";
 let fixtureServer;
 let fixtureOrigin;
@@ -34,6 +36,13 @@ before(async () => {
         <title>Start</title>
         <button id="load">Load data</button>
         <input id="seed-value" value="seed">
+        <input placeholder="Repeated field" hidden>
+        <input id="visible-repeated" placeholder="Repeated field">
+        <input id="upload" type="file" multiple hidden>
+        <div id="custom-select" class="el-select" style="position:relative;width:180px;height:32px" onclick="this.dataset.clicks = String(Number(this.dataset.clicks || 0) + 1)">
+          <input id="custom-combobox" readonly role="combobox" style="width:180px;height:32px">
+          <span style="position:absolute;inset:0">Choose stage</span>
+        </div>
         <uni-button id="custom-save"><uni-view class="wd-button__text">保存</uni-view></uni-button>
         <div id="custom-cancel" class="uni-modal__btn uni-modal__btn_default"><span class="uni-modal__btn-text">取消</span></div>
         <div id="custom-ai" class="ai-btn"><span>AI 生成</span></div>
@@ -78,12 +87,39 @@ before(async () => {
       send(response, 200, "text/html; charset=utf-8", "<!doctype html><title>Next page</title><main>Navigation complete</main>");
       return;
     }
+    if (url.pathname === "/spa") {
+      send(response, 200, "text/html; charset=utf-8", `<!doctype html><main id="route"></main><script>
+        const render = () => {
+          const route = document.querySelector('#route');
+          route.dataset.hash = location.hash;
+          route.textContent = location.hash;
+          if (location.hash !== '#/one') {
+            route.dataset.requested = 'true';
+            fetch('/api/hash?value=' + encodeURIComponent(location.hash))
+              .then(response => response.json().then(() => response))
+              .then(response => {
+                route.dataset.completed = 'true';
+                route.dataset.responseUrl = response.url;
+                route.dataset.status = String(response.status);
+              })
+              .catch(error => { route.dataset.error = error.message; });
+          }
+        };
+        addEventListener('hashchange', render);
+        render();
+      </script>`);
+      return;
+    }
     if (url.pathname === "/api/data") {
       send(response, 200, "application/json", JSON.stringify({ ok: true, source: "fixture" }));
       return;
     }
     if (url.pathname === "/api/many") {
       send(response, 200, "application/json", JSON.stringify({ id: Number(url.searchParams.get("i")) }));
+      return;
+    }
+    if (url.pathname === "/api/hash") {
+      send(response, 200, "application/json", JSON.stringify({ value: url.searchParams.get("value") }));
       return;
     }
     if (url.pathname === "/binary") {
@@ -182,6 +218,27 @@ function assertFlowResult(result) {
   assert(result.routeCalls.some((call) => call.url === credentialedMockUrl && call.action === "fulfill" && call.status === 200));
 }
 
+function assertErgonomicResult(result) {
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.outputs.repeated, "filled");
+  assert.equal(result.outputs.clicks, "2");
+  assert.deepEqual(result.outputs.uploadedFiles, ["README.md"]);
+  assert.equal(result.outputs.boundedText.length, 32);
+  assert.match(result.outputs.boundedText, /\.\.\.\[truncated\]$/);
+  assert.deepEqual(result.locatorFallbacks, [
+    { index: 0, strategy: "unique-visible-match" },
+    { index: 1, strategy: "unique-visible-match" },
+    { index: 2, strategy: "placeholder-text" },
+    { index: 3, strategy: "readonly-control-ancestor" },
+  ]);
+}
+
+function assertHashNavigationResult(result) {
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.outputs.route, "#/two");
+  assert.deepEqual(result.outputs.hashes.map((entry) => entry.body.value), ["#/middle", "#/two"]);
+}
+
 function missingPopupContract(id) {
   return {
     id,
@@ -225,6 +282,41 @@ function viewportContract(id, viewport) {
     steps: [
       { op: "setContent", html: "<!doctype html><main>Viewport probe</main>" },
       { op: "evaluate", expression: "({ width: innerWidth, height: innerHeight })", as: "viewport" },
+    ],
+  };
+}
+
+function ergonomicContract(id) {
+  return {
+    id,
+    url: `${fixtureOrigin}/start`,
+    steps: [
+      { op: "fill", target: { placeholder: "Repeated field" }, text: "filled" },
+      { op: "readValue", target: { placeholder: "Repeated field" }, as: "repeated" },
+      { op: "click", target: { placeholder: "Choose stage" } },
+      { op: "click", target: { css: "#custom-combobox" } },
+      { op: "readAttribute", target: { css: "#custom-select" }, attribute: "data-clicks", as: "clicks" },
+      { op: "setInputFiles", target: { css: "#upload" }, files: [path.resolve(pluginDir, "../..", "README.md")] },
+      { op: "evaluate", expression: "Array.from(document.querySelector('#upload').files, file => file.name)", as: "uploadedFiles" },
+      { op: "readText", target: { css: "body" }, maxChars: 32, as: "boundedText" },
+      { op: "waitForTimeout", timeoutMs: 5 },
+      { op: "reload" },
+      { op: "wait", target: { css: "#custom-select" } },
+    ],
+  };
+}
+
+function hashNavigationContract(id) {
+  return {
+    id,
+    url: `${fixtureOrigin}/spa#/one`,
+    captureResponses: [
+      { url: "**/api/hash*", method: "GET", body: "json", as: "hashes", count: 2, timeoutMs: 2000 },
+    ],
+    steps: [
+      { op: "goto", url: `${fixtureOrigin}/spa#/middle` },
+      { op: "goto", url: `${fixtureOrigin}/spa#/two` },
+      { op: "readText", target: { css: "#route" }, as: "route" },
     ],
   };
 }
@@ -299,22 +391,47 @@ test("schema exposes scoped targets and validates new operations", () => {
   assert.equal(contractSchema.$defs.target.properties.within.$ref, "#/$defs/target");
   assert.equal(contractSchema.$defs.target.properties.frame.$ref, "#/$defs/frame");
   assert.equal(contractSchema.$defs.target.properties.hasText.oneOf.length, 2);
-  assert.equal(contractSchema.$defs.target.oneOf.length, 6);
-  assert.equal(contractSchema.$defs.frame.oneOf.length, 3);
-  assert.equal(contractSchema.$defs.step.oneOf.length, 10);
-  assert.equal(contractSchema.$defs.expectation.oneOf.length, 5);
-  assert.equal(contractSchema.properties.routes.items.$ref, "#/$defs/route");
-  assert.equal(contractSchema.$defs.route.additionalProperties, false);
+  assert.equal(contractSchema.properties.steps.items.type, "object");
+  assert.equal(contractSchema.properties.steps.items.properties.target.type, "object");
+  assert.equal(contractSchema.properties.routes.items.type, "object");
+  assert.equal(contractSchema.properties.expect.items.type, "object");
+  assert.equal(contractSchema.properties.ready.type, "object");
+  assert.equal(contractSchema.properties.routes.items.additionalProperties, false);
   assert.equal(contractSchema.$defs.target.properties.name.type, "string");
-  assert.equal(contractSchema.$defs.step.properties.timeoutMs.maximum, MAX_OPERATION_TIMEOUT_MS);
-  assert(contractSchema.$defs.step.properties.popup.enum.includes("switch"));
-  assert(contractSchema.$defs.step.properties.op.enum.includes("goto"));
-  assert(contractSchema.$defs.step.properties.op.enum.includes("evaluate"));
-  assert(contractSchema.$defs.step.properties.op.enum.includes("readValue"));
+  assert.equal(contractSchema.properties.steps.items.properties.timeoutMs.maximum, MAX_OPERATION_TIMEOUT_MS);
+  assert(contractSchema.properties.steps.items.properties.popup.enum.includes("switch"));
+  assert(contractSchema.properties.steps.items.properties.op.enum.includes("goto"));
+  assert(contractSchema.properties.steps.items.properties.op.enum.includes("reload"));
+  assert(contractSchema.properties.steps.items.properties.op.enum.includes("waitForTimeout"));
+  assert(contractSchema.properties.steps.items.properties.op.enum.includes("setInputFiles"));
+  assert(contractSchema.properties.steps.items.properties.op.enum.includes("evaluate"));
+  assert(contractSchema.properties.steps.items.properties.op.enum.includes("readValue"));
+  assert.equal(contractSchema.properties.steps.items.properties.text.type, "string");
+  assert.equal(contractSchema.properties.steps.items.properties.maxChars.type, "integer");
+  assert.equal(contractSchema.properties.steps.items.properties.ms.maximum, MAX_OPERATION_TIMEOUT_MS);
   assert.match(contractSchema.properties.ready.description, /nest the locator under target/);
   assert.match(contractSchema.properties.routes.description, /scoped to this run/);
   validateContract(flowContract("validation"));
+  validateContract(ergonomicContract("ergonomic-validation"));
   validateContract({ ready: { target: { text: "Ready" }, state: "visible" } });
+  validateContract({ steps: [{ op: "fill", target: { css: "input" }, text: "value", first: true }] });
+  validateContract({ steps: [{ op: "reload", waitUntil: "load" }] });
+  validateContract({ steps: [{ op: "waitForTimeout", timeoutMs: 10 }] });
+  validateContract({ steps: [{ op: "setInputFiles", target: { css: "input[type=file]" }, paths: ["/tmp/example.txt"] }] });
+  validateContract({
+    steps: [
+      { op: "click", target: { css: "button" } },
+      { op: "goto", url: "http://app.test/one" },
+      { op: "wait", target: { css: "body" }, timeoutMs: 5000 },
+      { op: "goto", url: "http://app.test/two" },
+      { op: "wait", target: { css: "main" }, timeoutMs: 10000 },
+      { op: "evaluate", expression: "document.title" },
+    ],
+    captureResponses: [
+      { url: "**/save", as: "saved", timeoutMs: 10000 },
+      { url: "**/restore", as: "restored", timeoutMs: 10000 },
+    ],
+  });
   assert.throws(
     () => validateContract({ ready: { text: "Ready", state: "visible" } }),
     /ready target is required/,
@@ -325,11 +442,15 @@ test("schema exposes scoped targets and validates new operations", () => {
   );
   assert.throws(
     () => validateContract({ steps: [{ op: "fill", target: { css: "input" } }] }),
-    /value must be a string for fill/,
+    /value or steps\[0\]\.text must be a string for fill/,
   );
   assert.throws(
     () => validateContract({ steps: [{ op: "type", target: { css: "input" } }] }),
-    /value must be a string for type/,
+    /value or steps\[0\]\.text must be a string for type/,
+  );
+  assert.throws(
+    () => validateContract({ steps: [{ op: "setInputFiles", target: { css: "input[type=file]" }, files: [] }] }),
+    /files must be a non-empty string array/,
   );
   assert.throws(
     () => validateContract({ steps: [{ op: "press", target: { css: "input" } }] }),
@@ -380,6 +501,7 @@ test("schema exposes scoped targets and validates new operations", () => {
 test("read operations pass supported per-step timeouts to Playwright", async () => {
   const calls = [];
   const locator = {
+    count: async () => 1,
     textContent: async (options) => { calls.push(["textContent", options]); return "text"; },
     getAttribute: async (name, options) => { calls.push(["getAttribute", name, options]); return "value"; },
     inputValue: async (options) => { calls.push(["inputValue", options]); return "input"; },
@@ -403,6 +525,22 @@ test("read operations pass supported per-step timeouts to Playwright", async () 
     ["evaluate", ["color"], { timeout: 90 }],
   ]);
   assert.equal(outputs.input, "input");
+});
+
+test("response capture timeouts share one run-relative deadline", async () => {
+  const context = new EventEmitter();
+  const flow = new FlowRuntime({ context, page: {} });
+  const capture = flow.installResponseCaptures({
+    captureResponses: [
+      { url: "**/first", as: "first", timeoutMs: 60 },
+      { url: "**/second", as: "second", timeoutMs: 60 },
+    ],
+  }, {}, 2000);
+  const started = performance.now();
+  await assert.rejects(capture.wait(), /Timed out after 60ms/);
+  const elapsedMs = performance.now() - started;
+  capture.dispose();
+  assert(elapsedMs < 105, `response waits took ${elapsedMs}ms and appear serial`);
 });
 
 test("continuations preserve viewport and screenshots use the navigation timeout floor", () => {
@@ -532,9 +670,9 @@ test("MCP entrypoint runs scoped popup, response, frame, goto, and evaluate flow
     const listed = await client.waitFor((message) => message.id === 2);
     const runTool = listed.result.tools.find((tool) => tool.name === "run");
     assert.equal(runTool.inputSchema.$defs.target.properties.within.$ref, "#/$defs/target");
-    assert.equal(runTool.inputSchema.$defs.target.oneOf.length, 6);
-    assert.equal(runTool.inputSchema.$defs.step.oneOf.length, 10);
-    assert.equal(runTool.inputSchema.properties.routes.items.$ref, "#/$defs/route");
+    assert.equal(runTool.inputSchema.properties.steps.items.type, "object");
+    assert.equal(runTool.inputSchema.properties.steps.items.properties.target.type, "object");
+    assert.equal(runTool.inputSchema.properties.routes.items.type, "object");
     client.write({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "run", arguments: flowContract("mcp") } });
     const reply = await client.waitFor((message) => message.id === 3);
     assert.equal(reply.result.isError, false, JSON.stringify(reply));
@@ -553,7 +691,18 @@ test("MCP entrypoint runs scoped popup, response, frame, goto, and evaluate flow
     client.write({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "status", arguments: {} } });
     const status = JSON.parse((await client.waitFor((message) => message.id === 7)).result.content[0].text);
     assert.equal(status.version, manifest.version);
+    assert.equal(status.playwrightVersion, runtimeSpec.playwrightVersion);
+    assert.equal(status.chromiumRevision, runtimeSpec.chromiumRevision);
+    assert.equal(status.chromiumVersion, runtimeSpec.chromiumVersion);
+    assert.equal(status.browserSource, "playwright-managed");
+    assert.equal(fs.existsSync(status.browserExecutablePath), true);
     assert.deepEqual(status.viewport, DEFAULT_VIEWPORT);
+    client.write({ jsonrpc: "2.0", id: 8, method: "tools/call", params: { name: "run", arguments: ergonomicContract("mcp-ergonomic") } });
+    const ergonomic = JSON.parse((await client.waitFor((message) => message.id === 8)).result.content[0].text);
+    assertErgonomicResult(ergonomic);
+    client.write({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "run", arguments: hashNavigationContract("mcp-hash") } });
+    const hashNavigation = JSON.parse((await client.waitFor((message) => message.id === 9)).result.content[0].text);
+    assertHashNavigationResult(hashNavigation);
   } finally {
     await client.stop();
   }
@@ -585,6 +734,12 @@ test("JSONL entrypoint runs the same flow", { timeout: 20_000 }, async () => {
     const desktop = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-default");
     assert.deepEqual(desktop.viewport, DEFAULT_VIEWPORT);
     assert.deepEqual(desktop.outputs.viewport, DEFAULT_VIEWPORT);
+    client.write(ergonomicContract("jsonl-ergonomic"));
+    const ergonomic = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-ergonomic");
+    assertErgonomicResult(ergonomic);
+    client.write(hashNavigationContract("jsonl-hash"));
+    const hashNavigation = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-hash");
+    assertHashNavigationResult(hashNavigation);
     client.write({ id: "evaluate-timeout", steps: [{ op: "evaluate", expression: "new Promise(() => {})", timeoutMs: 50 }] });
     const evaluateTimeout = await client.waitFor((message) => message.type === "result" && message.id === "evaluate-timeout");
     assert.equal(evaluateTimeout.failureKind, "runtime");
