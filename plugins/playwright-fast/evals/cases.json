@@ -1,0 +1,132 @@
+[
+  {
+    "id": "basic-form",
+    "title": "填写筛选条件并读取结果",
+    "group": "fixture",
+    "core": true,
+    "prompt": "打开 ${FIXTURE_URL}/form?run=${RUN_ID}，将客户姓名填写为陈伟、订单状态选择为已付款并查询，然后告诉我第一条结果的金额。",
+    "finalIncludes": ["268.00"],
+    "oracle": { "search": "陈伟|已付款" }
+  },
+  {
+    "id": "scoped-row",
+    "title": "在重复行中操作正确目标",
+    "group": "fixture",
+    "core": true,
+    "prompt": "打开 ${FIXTURE_URL}/rows?run=${RUN_ID}，在手机号为 13900000000 且身份为管理员的那一行点击模拟登录，并告诉我选择的身份。",
+    "finalIncludes": ["管理员"],
+    "oracle": { "selectedRole": "管理员" }
+  },
+  {
+    "id": "mobile-visual",
+    "title": "移动端视觉与几何读取",
+    "group": "fixture",
+    "core": false,
+    "prompt": "用 375×812 的视口打开 ${FIXTURE_URL}/responsive?run=${RUN_ID}，检查页面视觉并读取“视口卡片”的实际宽度，告诉我像素值。",
+    "finalIncludes": ["343"],
+    "requiresVisual": true
+  },
+  {
+    "id": "fill-wait",
+    "title": "隐藏重复输入与异步保存",
+    "group": "fixture",
+    "core": true,
+    "prompt": "打开 ${FIXTURE_URL}/ergonomic?run=${RUN_ID}，把可见的昵称输入框填写为 alpha，点击保存，等到保存完成后再读回输入值。",
+    "finalIncludes": ["alpha"],
+    "oracle": { "nickname": "alpha" }
+  },
+  {
+    "id": "reload-state",
+    "title": "刷新后保持页面状态",
+    "group": "fixture",
+    "core": false,
+    "prompt": "打开 ${FIXTURE_URL}/reload?run=${RUN_ID}，点击一次增加计数，刷新当前页面，再告诉我刷新后的计数。",
+    "finalIncludes": ["1"],
+    "oracle": { "count": "1" }
+  },
+  {
+    "id": "file-upload",
+    "title": "上传本地文件并读取文件名",
+    "group": "fixture",
+    "core": true,
+    "prompt": "打开 ${FIXTURE_URL}/upload?run=${RUN_ID}，将文件 ${UPLOAD_PATH} 上传到“选择附件”，然后告诉我页面显示的文件名。",
+    "finalIncludes": ["runtime.json"],
+    "oracle": { "uploaded": "runtime.json" }
+  },
+  {
+    "id": "element-control",
+    "title": "Element Plus 覆盖式下拉控件",
+    "group": "fixture",
+    "core": true,
+    "prompt": "打开 ${FIXTURE_URL}/element?run=${RUN_ID}，打开学段选择器并选择初中，最后告诉我选中的学段。",
+    "finalIncludes": ["初中"],
+    "oracle": { "stage": "初中" }
+  },
+  {
+    "id": "uni-controls",
+    "title": "uni-app 自定义按钮",
+    "group": "fixture",
+    "core": false,
+    "prompt": "打开 ${FIXTURE_URL}/uni?run=${RUN_ID}，依次点击保存和取消，并确认两次操作都完成。",
+    "finalIncludes": ["保存", "取消"],
+    "oracle": { "uniSave": true, "uniCancel": true }
+  },
+  {
+    "id": "frame-popup",
+    "title": "iframe 与新窗口",
+    "group": "fixture",
+    "core": false,
+    "prompt": "打开 ${FIXTURE_URL}/frames?run=${RUN_ID}，先读取“详情”框架里的编号，再点击打开详情窗口并读取窗口编号，把两个编号都告诉我。",
+    "finalIncludes": ["F-2048", "P-4096"]
+  },
+  {
+    "id": "hash-router",
+    "title": "Hash Router 同页导航",
+    "group": "fixture",
+    "core": true,
+    "prompt": "打开 ${FIXTURE_URL}/spa#/one，然后在同一个流程中导航到 ${FIXTURE_URL}/spa#/two，等待页面异步结果完成并告诉我结果文本。",
+    "finalIncludes": ["#/two"]
+  },
+  {
+    "id": "response-mock",
+    "title": "接口 mock 与响应捕获",
+    "group": "fixture",
+    "core": false,
+    "prompt": "打开 ${FIXTURE_URL}/network?run=${RUN_ID}，把 /api/orders（无论是否带查询参数）的 GET 响应模拟为 {\"data\":[{\"name\":\"评测订单\"}]}，点击加载订单并告诉我页面第一条订单名称。",
+    "finalIncludes": ["评测订单"]
+  },
+  {
+    "id": "cors-mock",
+    "title": "带凭据的 CORS mock",
+    "group": "fixture",
+    "core": false,
+    "prompt": "打开 ${FIXTURE_URL}/cors?run=${RUN_ID}，将 http://127.0.0.1:1/api/profile（包括查询参数）的 GET 请求模拟为 {\"name\":\"林老师\"}，需要支持带凭据的跨域请求；点击读取资料并告诉我姓名。",
+    "finalIncludes": ["林老师"],
+    "oracle": { "corsName": "林老师" }
+  },
+  {
+    "id": "targeted-diagnostic",
+    "title": "目标缺失后的单次诊断",
+    "group": "fixture",
+    "core": true,
+    "diagnostic": true,
+    "prompt": "打开 ${FIXTURE_URL}/missing?run=${RUN_ID}，确认页面是否出现“发布成功”。如果没有出现，只做一次有针对性的诊断并明确告诉我它不存在。",
+    "finalIncludesAny": [["不存在", "未出现", "没有"]]
+  },
+  {
+    "id": "real-admin",
+    "title": "真实 Element Plus 管理端",
+    "group": "real",
+    "core": false,
+    "prompt": "打开 ${ADMIN_URL}/#/login，不调用真实登录接口。将手机号改成 123、密码留空并点击登录，告诉我页面出现的两个校验提示。",
+    "finalIncludes": ["请输入正确的手机号", "请输入登录密码"]
+  },
+  {
+    "id": "real-uni",
+    "title": "真实 uni-app H5",
+    "group": "real",
+    "core": false,
+    "prompt": "用手机视口打开 ${UNI_URL}/#/pages/auth/login，不进行登录。勾选“我已阅读并同意”，确认勾选标记可见，再点击《用户服务协议》并告诉我到达页面的标题。",
+    "finalIncludes": ["用户服务协议"]
+  }
+]

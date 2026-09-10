@@ -4,8 +4,9 @@ const diagnosticRequestTypes = new Set(["document", "xhr", "fetch", "eventsource
 const DEFAULT_TIMEOUT_MS = 2000;
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 5000;
 const DEFAULT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
-const MAX_OPERATION_TIMEOUT_MS = 10_000;
-const MAX_CONTRACT_BUDGET_MS = 45_000;
+const MAX_OPERATION_TIMEOUT_MS = 30_000;
+const MAX_FLOW_TIMEOUT_MS = 30_000;
+const MAX_CONTRACT_BUDGET_MS = 50_000;
 const supportedSteps = new Set([
   "setContent", "goto", "reload", "click", "fill", "clear", "type", "press", "select", "setInputFiles", "check",
   "uncheck", "hover", "focus", "wait", "readText", "readAllText", "readAttribute",
@@ -47,6 +48,7 @@ function compactError(error) {
 }
 
 function effectiveStepTarget(step) {
+  if (step?.op === "readAllText" && step.target === undefined) return { css: "body" };
   if (!step?.target || (step.first === undefined && step.nth === undefined)) return step?.target;
   return {
     ...step.target,
@@ -99,9 +101,8 @@ function validateTarget(target, label) {
 
 function validateExpectation(expectation, label) {
   assertContract(expectation && typeof expectation === "object" && !Array.isArray(expectation), `${label} must be an object`);
-  const pageExpectation = ["url", "urlIncludes", "title", "titleIncludes"].some(
-    (key) => expectation[key] !== undefined,
-  );
+  const pageExpectation = expectation.url !== undefined || expectation.urlIncludes !== undefined ||
+    (expectation.target === undefined && (expectation.title !== undefined || expectation.titleIncludes !== undefined));
   if (!pageExpectation) validateTarget(expectation.target, label);
   if (expectation.attribute !== undefined) {
     assertContract(expectation.attribute && typeof expectation.attribute.name === "string", `${label}.attribute must contain a string name`);
@@ -122,28 +123,41 @@ function expectationBudgetMs(expectation, defaultTimeoutMs) {
 function estimateContractBudgetMs(contract) {
   const defaultTimeoutMs = contract.timeoutMs || DEFAULT_TIMEOUT_MS;
   const navigationTimeoutMs = contract.navigationTimeoutMs || DEFAULT_NAVIGATION_TIMEOUT_MS;
-  let budgetMs = contract.url ? navigationTimeoutMs : 0;
-  if (contract.ready) budgetMs += expectationBudgetMs(contract.ready, defaultTimeoutMs);
+  let serialBudgetMs = contract.url ? navigationTimeoutMs : 0;
+  let currentDocumentUrl = contract.url;
+  let largestLocatorBudgetMs = contract.ready ? expectationBudgetMs(contract.ready, defaultTimeoutMs) : 0;
   for (const step of contract.steps || []) {
     if (step.op === "wait" && step.ms !== undefined) {
-      budgetMs += step.ms;
+      serialBudgetMs += step.ms;
     } else if (step.op === "waitForTimeout") {
-      budgetMs += step.ms ?? step.timeoutMs ?? defaultTimeoutMs;
-    } else if (step.op === "goto" || step.op === "reload" || step.op === "setContent") {
-      budgetMs += step.timeoutMs || navigationTimeoutMs;
+      serialBudgetMs += step.ms ?? step.timeoutMs ?? defaultTimeoutMs;
+    } else if (step.op === "goto") {
+      const sameDocument = currentDocumentUrl && String(currentDocumentUrl).split("#", 1)[0] === String(step.url).split("#", 1)[0];
+      if (!sameDocument) serialBudgetMs += step.timeoutMs || navigationTimeoutMs;
+      currentDocumentUrl = step.url;
+    } else if (step.op === "reload" || step.op === "setContent") {
+      serialBudgetMs += step.timeoutMs || navigationTimeoutMs;
+      if (step.op === "setContent") currentDocumentUrl = undefined;
     } else if (step.op === "click" && step.popup === "switch") {
-      budgetMs += step.timeoutMs ? 3 * step.timeoutMs : 2 * defaultTimeoutMs + navigationTimeoutMs;
+      serialBudgetMs += step.timeoutMs ? 3 * step.timeoutMs : 2 * defaultTimeoutMs + navigationTimeoutMs;
     } else {
-      budgetMs += step.timeoutMs || defaultTimeoutMs;
+      largestLocatorBudgetMs = Math.max(largestLocatorBudgetMs, step.timeoutMs || defaultTimeoutMs);
     }
   }
   for (const expectation of contract.expect || []) {
-    budgetMs += expectationBudgetMs(expectation, defaultTimeoutMs);
+    largestLocatorBudgetMs = Math.max(largestLocatorBudgetMs, expectationBudgetMs(expectation, defaultTimeoutMs));
   }
   const responseBudgetMs = Math.max(0, ...(contract.captureResponses || [])
     .filter((capture) => capture.required !== false)
     .map((capture) => capture.timeoutMs || defaultTimeoutMs));
-  return Math.max(budgetMs, responseBudgetMs);
+  // A locator failure stops the flow. Adding every locator timeout rejects compact flows even
+  // though only one failure ceiling can be consumed; navigation and explicit sleeps stay serial.
+  return Math.max(serialBudgetMs + largestLocatorBudgetMs, responseBudgetMs);
+}
+
+function suggestedNextAction(failureKind) {
+  if (failureKind === "contract") return "Correct the reported contract field and rerun the same compact flow.";
+  return "Preserve the current page and run one targeted diag contract without repeating the failed expectation; omit top-level url unless diagnosis navigates.";
 }
 
 function resolveViewport(contract, currentViewport) {
@@ -163,9 +177,11 @@ function validateContract(contract) {
   assertContract(supportedEvidence.has(contract.evidence || "ultra"), "Unsupported evidence tier");
   if (contract.url !== undefined) assertContract(typeof contract.url === "string" && contract.url.length > 0, "url must be a non-empty string");
   if (contract.waitUntil !== undefined) assertContract(supportedWaitUntil.has(contract.waitUntil), "Unsupported waitUntil value");
-  for (const key of ["timeoutMs", "navigationTimeoutMs"]) {
-    if (contract[key] !== undefined) assertBoundedTimeout(contract[key], key);
+  if (contract.timeoutMs !== undefined) {
+    assertContract(Number.isInteger(contract.timeoutMs) && contract.timeoutMs > 0, "timeoutMs must be a positive integer");
+    assertContract(contract.timeoutMs <= MAX_FLOW_TIMEOUT_MS, `timeoutMs must not exceed ${MAX_FLOW_TIMEOUT_MS}ms`);
   }
+  if (contract.navigationTimeoutMs !== undefined) assertBoundedTimeout(contract.navigationTimeoutMs, "navigationTimeoutMs");
   if (contract.viewport !== undefined) {
     assertContract(Number.isInteger(contract.viewport.width) && contract.viewport.width > 0 && Number.isInteger(contract.viewport.height) && contract.viewport.height > 0, "viewport requires positive integer width and height");
   }
@@ -265,6 +281,8 @@ function validateContract(contract) {
     if (step.op === "evaluate") {
       assertContract(typeof step.expression === "string" && step.expression.length > 0, `${label}.expression is required`);
       if (step.frame !== undefined) validateFrame(step.frame, `${label}.frame`);
+      if (step.target !== undefined) validateTarget(effectiveStepTarget(step), label);
+      assertContract(!(step.frame && step.target), `${label} cannot define both frame and target`);
       return;
     }
     if (step.op === "waitForTimeout") {
@@ -292,7 +310,6 @@ function validateContract(contract) {
       );
     }
     if (step.maxChars !== undefined) assertContract(["readText", "readAllText"].includes(step.op), `${label}.maxChars is only supported for readText and readAllText`);
-    if (step.op === "readAllText" && step.timeoutMs !== undefined) assertContract(false, `${label}.timeoutMs is not supported for readAllText because it does not wait for a locator`);
     if (step.op === "readAttribute") assertContract(typeof step.attribute === "string" && step.attribute.length > 0, `${label}.attribute must be a non-empty string`);
     if (step.op === "readComputedStyle") assertContract(Array.isArray(step.properties) && step.properties.length > 0 && step.properties.every((property) => typeof property === "string" && property.length > 0), `${label}.properties must be a non-empty string array`);
   });
@@ -482,6 +499,14 @@ class FlowRuntime {
     return { locator: locator.nth(visibleIndexes[0]), locatorFallback: "unique-visible-match" };
   }
 
+  async resolveImplicitFuzzyLocator(target, locator) {
+    const fuzzyKind = target.label !== undefined ? "label" : target.text !== undefined ? "text" : null;
+    if (target.exact !== undefined || fuzzyKind === null || await locator.count() !== 0) return { locator };
+    const fallback = this.locate({ ...target, exact: false });
+    if (await fallback.count() === 0) return { locator };
+    return { locator: fallback, locatorFallback: `${fuzzyKind}-substring` };
+  }
+
   async resolveClickLocator(target, locator, locatorFallback) {
     let candidate = locator;
     let strategy = locatorFallback;
@@ -609,20 +634,35 @@ class FlowRuntime {
       return;
     }
     if (step.op === "evaluate") {
-      const target = await this.resolveEvaluationTarget(step.frame);
       const timeoutMs = step.timeoutMs || this.defaultTimeoutMs;
-      const value = await target.evaluate(
-        ({ expression, arg, timeoutMs: evaluationTimeoutMs }) => {
-          const evaluated = eval(expression);
-          const result = typeof evaluated === "function" ? evaluated(arg) : evaluated;
-          if (!result || typeof result.then !== "function") return result;
-          return Promise.race([
-            result,
-            new Promise((_, reject) => setTimeout(() => reject(new Error(`Evaluation timed out after ${evaluationTimeoutMs}ms`)), evaluationTimeoutMs)),
-          ]);
-        },
-        { expression: step.expression, arg: step.arg, timeoutMs },
-      );
+      let value;
+      if (step.target) {
+        const exactLocator = this.locate(effectiveStepTarget(step));
+        const fuzzy = await this.resolveImplicitFuzzyLocator(effectiveStepTarget(step), exactLocator);
+        const resolved = await this.resolveUniqueVisibleLocator(fuzzy.locator);
+        value = await resolved.locator.evaluate(
+          (element, { expression, arg }) => {
+            const evaluated = eval(expression);
+            return typeof evaluated === "function" ? evaluated(element, arg) : evaluated;
+          },
+          { expression: step.expression, arg: step.arg },
+          { timeout: timeoutMs },
+        );
+      } else {
+        const target = await this.resolveEvaluationTarget(step.frame);
+        value = await target.evaluate(
+          ({ expression, arg, timeoutMs: evaluationTimeoutMs }) => {
+            const evaluated = eval(expression);
+            const result = typeof evaluated === "function" ? evaluated(arg) : evaluated;
+            if (!result || typeof result.then !== "function") return result;
+            return Promise.race([
+              result,
+              new Promise((_, reject) => setTimeout(() => reject(new Error(`Evaluation timed out after ${evaluationTimeoutMs}ms`)), evaluationTimeoutMs)),
+            ]);
+          },
+          { expression: step.expression, arg: step.arg, timeoutMs },
+        );
+      }
       outputs[step.as || "evaluation"] = value;
       return;
     }
@@ -635,15 +675,57 @@ class FlowRuntime {
     const locator = this.locate(target);
     const actionOptions = step.timeoutMs ? { timeout: step.timeoutMs } : undefined;
     const canPreferVisible = step.op !== "readAllText" && !(step.op === "wait" && ["hidden", "detached"].includes(step.state));
+    const fuzzyResolved = await this.resolveImplicitFuzzyLocator(target, locator);
     const initiallyResolved = canPreferVisible
-      ? await this.resolveUniqueVisibleLocator(locator)
-      : { locator };
+      ? await this.resolveUniqueVisibleLocator(fuzzyResolved.locator)
+      : fuzzyResolved;
     const resolvedLocator = initiallyResolved.locator;
-    let locatorFallback = initiallyResolved.locatorFallback;
+    let locatorFallback = fuzzyResolved.locatorFallback || initiallyResolved.locatorFallback;
     switch (step.op) {
       case "click": {
         const resolved = await this.resolveClickLocator(target, resolvedLocator, locatorFallback);
         locatorFallback = resolved.locatorFallback;
+        const clickOrSelectOption = async () => {
+          let optionLocator = resolved.locator;
+          let optionValue = await resolved.locator.evaluate((element, requested) => {
+            if (element.tagName.toLowerCase() === "option") return element.value;
+            if (requested.text === undefined) return null;
+            const select = element.tagName.toLowerCase() === "select" ? element : element.querySelector("select");
+            if (!select) return null;
+            const option = Array.from(select.options).find((candidate) => requested.exact === false
+              ? candidate.text.includes(requested.text)
+              : candidate.text === requested.text);
+            return option?.value ?? null;
+          }, { text: target.text, exact: target.exact });
+          if (optionValue === null && target.text !== undefined) {
+            const resolvedIsInteractive = await resolved.locator.evaluate((element) =>
+              ["button", "a", "summary", "uni-button"].includes(element.tagName.toLowerCase()) ||
+              element.getAttribute("role") === "button" ||
+              (element.tagName.toLowerCase() === "input" && ["button", "submit", "reset"].includes(element.getAttribute("type"))),
+            );
+            if (!resolvedIsInteractive) {
+              const optionCandidates = this.locate({ css: "option", within: target.within, frame: target.frame });
+              const matchingIndexes = await optionCandidates.evaluateAll((options, requested) =>
+                options.flatMap((option, index) => {
+                  const matches = requested.exact === false
+                    ? option.text.includes(requested.text)
+                    : option.text === requested.text;
+                  return matches ? [index] : [];
+                }), { text: target.text, exact: target.exact });
+              if (matchingIndexes.length === 1) {
+                optionLocator = optionCandidates.nth(matchingIndexes[0]);
+                optionValue = await optionLocator.evaluate((option) => option.value);
+              }
+            }
+          }
+          if (optionValue === null) {
+            await resolved.locator.click(actionOptions);
+            return;
+          }
+          const select = optionLocator.locator("xpath=ancestor-or-self::select[1] | descendant::select[1]");
+          await select.selectOption(optionValue, actionOptions);
+          locatorFallback = "option-click-select";
+        };
         if (step.popup === "switch") {
           let popupWaitError;
           const popupPromise = this.context.waitForEvent("page", {
@@ -652,12 +734,12 @@ class FlowRuntime {
             popupWaitError = error;
             return null;
           });
-          await resolved.locator.click(actionOptions);
+          await clickOrSelectOption();
           const popup = await popupPromise;
           if (!popup) throw new PopupError(compactError(popupWaitError));
           await this.switchToPage(popup);
           await popup.waitForLoadState(step.waitUntil || "domcontentloaded", actionOptions);
-        } else await resolved.locator.click(actionOptions);
+        } else await clickOrSelectOption();
         break;
       }
       case "fill": await resolvedLocator.fill(step.value ?? step.text, actionOptions); break;
@@ -677,12 +759,22 @@ class FlowRuntime {
         break;
       }
       case "readAllText": {
+        if (step.timeoutMs) await resolvedLocator.first().waitFor({ state: "attached", timeout: step.timeoutMs });
         const values = await resolvedLocator.allTextContents();
         outputs[step.as || "texts"] = values.map((value) => truncateText(value, step.maxChars));
         break;
       }
       case "readAttribute": outputs[step.as || step.attribute] = await resolvedLocator.getAttribute(step.attribute, actionOptions); break;
-      case "readValue": outputs[step.as || "value"] = await resolvedLocator.inputValue(actionOptions); break;
+      case "readValue": {
+        try {
+          outputs[step.as || "value"] = await resolvedLocator.inputValue(actionOptions);
+        } catch (error) {
+          if (!/Node is not an <input>, <textarea> or <select> element/i.test(compactError(error))) throw error;
+          outputs[step.as || "value"] = truncateText(await resolvedLocator.textContent(actionOptions), step.maxChars);
+          locatorFallback = "read-value-text-content";
+        }
+        break;
+      }
       case "readBoundingBox": {
         const box = await resolvedLocator.boundingBox(actionOptions);
         assertExpected(box, "Target has no visible bounding box");
@@ -704,7 +796,7 @@ class FlowRuntime {
       if (expectation.urlIncludes !== undefined) assertExpected(actual.includes(expectation.urlIncludes), `Expected URL containing ${expectation.urlIncludes}, received ${actual}`);
       return observed;
     }
-    if (expectation.title !== undefined || expectation.titleIncludes !== undefined) {
+    if (expectation.target === undefined && (expectation.title !== undefined || expectation.titleIncludes !== undefined)) {
       const actual = await this.page.title();
       observed.title = actual;
       if (expectation.title !== undefined) assertExpected(actual === expectation.title, `Expected title ${expectation.title}, received ${actual}`);
@@ -712,7 +804,9 @@ class FlowRuntime {
       return observed;
     }
 
-    const locator = this.locate(expectation.target);
+    const exactLocator = this.locate(expectation.target);
+    const { locator } = await this.resolveImplicitFuzzyLocator(expectation.target, exactLocator);
+    if (expectation.title !== undefined) observed.label = expectation.title;
     const hasCondition = ["state", "text", "contains", "value", "count", "attribute", "computedStyle", "box"].some((key) => expectation[key] !== undefined);
     if (!hasCondition || expectation.state !== undefined) {
       const state = expectation.state || "visible";
@@ -844,17 +938,20 @@ class FlowRuntime {
       state.changed = new Promise((resolve) => { state.notify = resolve; });
     };
     const captureBody = async (response, state) => {
-      const contentLength = Number(await response.headerValue("content-length"));
-      if (Number.isFinite(contentLength) && contentLength > state.rule.maxBodyBytes) {
+      const contentLengthHeader = await response.headerValue("content-length");
+      const contentLength = contentLengthHeader === null ? null : Number(contentLengthHeader);
+      if (contentLength !== null && Number.isFinite(contentLength) && contentLength > state.rule.maxBodyBytes) {
         throw new Error(`Response body exceeds maxBodyBytes (${state.rule.maxBodyBytes}) for ${state.rule.as}`);
       }
       const contentType = String(await response.headerValue("content-type") || "").toLowerCase();
       if (state.rule.body === "text" && contentType && !/^(text\/)|json|javascript|xml|x-www-form-urlencoded/.test(contentType)) {
         throw new Error(`Response content type ${contentType} is not textual for ${state.rule.as}`);
       }
+      if ([204, 205, 304].includes(response.status()) || contentLength === 0) return state.rule.body === "json" ? null : "";
       const buffer = await response.body();
       if (buffer.length > state.rule.maxBodyBytes) throw new Error(`Response body exceeds maxBodyBytes (${state.rule.maxBodyBytes}) for ${state.rule.as}`);
       const text = buffer.toString("utf8");
+      if (state.rule.body === "json" && text.length === 0) return null;
       return state.rule.body === "json" ? JSON.parse(text) : text;
     };
     const hasTextualBody = (response) => {
@@ -942,7 +1039,7 @@ const targetSchema = {
     placeholder: { type: "string", minLength: 1 },
     testId: { type: "string", minLength: 1 },
     css: { type: "string", minLength: 1 },
-    exact: { type: "boolean" },
+    exact: { type: "boolean", description: "Use exact matching. When omitted, text and label targets retry one substring match if exact matching finds nothing." },
     first: { type: "boolean" },
     nth: { type: "integer", minimum: 0 },
     hasText: {
@@ -980,7 +1077,7 @@ const stepSchema = {
     attribute: { type: "string", minLength: 1 },
     properties: { type: "array", minItems: 1, items: { type: "string", minLength: 1 } },
     as: { type: "string", minLength: 1, description: "Output key for reads/evaluate." },
-    timeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS },
+    timeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS, description: "Per-operation timeout. For readAllText, waits for the first match to attach before reading all matches." },
     waitUntil: { type: "string", enum: [...supportedWaitUntil] },
     popup: { type: "string", enum: ["switch"], description: "On click, atomically wait for and switch to the new page." },
     expression: { type: "string", minLength: 1, description: "Page expression or function expression for evaluate; optional arg is available and passed to functions." },
@@ -1026,7 +1123,7 @@ const expectationSchema = {
     url: { type: "string" }, urlIncludes: { type: "string" },
     title: { type: "string" }, titleIncludes: { type: "string" },
   },
-  description: "Define exactly one page field (url/urlIncludes/title/titleIncludes) or one target plus its expected state/value.",
+  description: "Define one page field (url/urlIncludes or title/titleIncludes without target), or one target plus its expected state/value. With target, title is an optional observation label.",
   additionalProperties: false,
 };
 
@@ -1051,7 +1148,7 @@ const contractSchema = {
       description: "Expectation checked after top-level navigation. Locator readiness must nest the locator under target, for example { target: { text: 'Ready' }, state: 'visible' }.",
     },
     evidence: { type: "string", enum: [...supportedEvidence] },
-    timeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS },
+    timeoutMs: { type: "integer", minimum: 1, maximum: MAX_FLOW_TIMEOUT_MS, description: "Default locator timeout for this flow; usually omit it. This is not a whole-flow deadline." },
     navigationTimeoutMs: { type: "integer", minimum: 1, maximum: MAX_OPERATION_TIMEOUT_MS },
     waitUntil: { type: "string", enum: [...supportedWaitUntil] },
     cookies: { type: "array", items: { type: "object", additionalProperties: true } },
@@ -1108,5 +1205,6 @@ module.exports = {
   recordRequestFailure,
   resolveViewport,
   screenshotTimeoutMs,
+  suggestedNextAction,
   validateContract,
 };

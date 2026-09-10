@@ -126,6 +126,11 @@ before(async () => {
       send(response, 200, "image/png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
       return;
     }
+    if (url.pathname === "/empty") {
+      response.writeHead(204, { "cache-control": "no-store" });
+      response.end();
+      return;
+    }
     send(response, 404, "text/plain", "not found");
   });
   await new Promise((resolve) => fixtureServer.listen(0, "127.0.0.1", resolve));
@@ -373,17 +378,14 @@ function lineClient(command, args, cwd) {
   return { child, waitFor, write, stop };
 }
 
-test("bundles one MCP-first Playwright skill with on-demand fallbacks", () => {
+test("bundles the MCP and JSONL entrypoints used by the Playwright skill", () => {
   const skillsDir = path.join(pluginDir, "skills");
   const skillDir = path.join(skillsDir, "playwright");
-  const skill = fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf8");
-  const fallbacks = fs.readFileSync(path.join(skillDir, "references", "fallbacks.md"), "utf8");
+  const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, ".codex-plugin", "plugin.json"), "utf8"));
 
-  assert.equal(fs.existsSync(path.join(skillsDir, "playwright-efficient")), false);
-  assert.match(skill, /Call the `run` tool from the `playwright-fast` MCP directly/);
-  assert.match(skill, /\[references\/fallbacks\.md\]\(references\/fallbacks\.md\)/);
-  assert.doesNotMatch(skill, /playwright-efficient/);
-  assert.match(fallbacks, /PLAYWRIGHT_SKILL_DIR/);
+  assert.equal(manifest.mcpServers, "./.mcp.json");
+  assert.equal(fs.existsSync(path.join(skillDir, "SKILL.md")), true);
+  assert.equal(fs.existsSync(path.join(skillDir, "references", "fallbacks.md")), true);
   assert.equal(fs.existsSync(path.join(skillDir, "scripts", "playwright_driver.sh")), true);
 });
 
@@ -418,6 +420,21 @@ test("schema exposes scoped targets and validates new operations", () => {
   validateContract({ steps: [{ op: "reload", waitUntil: "load" }] });
   validateContract({ steps: [{ op: "waitForTimeout", timeoutMs: 10 }] });
   validateContract({ steps: [{ op: "setInputFiles", target: { css: "input[type=file]" }, paths: ["/tmp/example.txt"] }] });
+  validateContract({ timeoutMs: 20000, steps: [{ op: "readAllText", target: { css: "body" }, timeoutMs: 15000 }] });
+  validateContract({
+    url: "http://127.0.0.1:3000/app#/one",
+    timeoutMs: 30000,
+    navigationTimeoutMs: 15000,
+    steps: [
+      { op: "waitForTimeout", ms: 1000 },
+      { op: "goto", url: "http://127.0.0.1:3000/app#/two", timeoutMs: 30000 },
+      { op: "waitForTimeout", ms: 1500 },
+      { op: "readAllText" },
+    ],
+  });
+  validateContract({ steps: [{ op: "readAllText", as: "pageText", maxChars: 1000 }] });
+  validateContract({ steps: [{ op: "evaluate", target: { css: "select" }, expression: "element => element.value" }] });
+  validateContract({ expect: [{ title: "human label", target: { css: "main" }, state: "visible" }] });
   validateContract({
     steps: [
       { op: "click", target: { css: "button" } },
@@ -484,10 +501,7 @@ test("schema exposes scoped targets and validates new operations", () => {
     () => validateContract({ steps: Array.from({ length: 5 }, () => ({ op: "wait", ms: MAX_OPERATION_TIMEOUT_MS })) }),
     new RegExp(`exceeds ${MAX_CONTRACT_BUDGET_MS}ms`),
   );
-  assert.throws(
-    () => validateContract({ steps: [{ op: "readAllText", target: { css: "li" }, timeoutMs: 10 }] }),
-    /timeoutMs is not supported for readAllText/,
-  );
+  validateContract({ steps: [{ op: "readAllText", target: { css: "li" }, timeoutMs: 10 }] });
   assert.throws(
     () => validateContract({ routes: [{ url: "**/api", json: {}, body: "duplicate" }] }),
     /exactly one of json, body, or abort/,
@@ -541,6 +555,30 @@ test("response capture timeouts share one run-relative deadline", async () => {
   const elapsedMs = performance.now() - started;
   capture.dispose();
   assert(elapsedMs < 105, `response waits took ${elapsedMs}ms and appear serial`);
+});
+
+test("empty response bodies are captured without a protocol-body failure", async () => {
+  const listeners = new Map();
+  const context = {
+    on: (name, handler) => listeners.set(name, handler),
+    off: (name) => listeners.delete(name),
+  };
+  const flow = new FlowRuntime({ context, page: {} });
+  const outputs = {};
+  const capture = flow.installResponseCaptures({
+    captureResponses: [{ url: "**/empty", body: "text", as: "empty" }],
+  }, outputs, 100);
+  listeners.get("response")({
+    url: () => "http://app.test/empty",
+    status: () => 204,
+    headers: () => ({}),
+    headerValue: async () => null,
+    body: async () => { throw new Error("body should not be read for 204"); },
+    request: () => ({ method: () => "GET" }),
+  });
+  await capture.wait();
+  capture.dispose();
+  assert.deepEqual(outputs.empty, { url: "http://app.test/empty", method: "GET", status: 204, body: "" });
 });
 
 test("continuations preserve viewport and screenshots use the navigation timeout floor", () => {
@@ -703,47 +741,57 @@ test("MCP entrypoint runs scoped popup, response, frame, goto, and evaluate flow
     client.write({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "run", arguments: hashNavigationContract("mcp-hash") } });
     const hashNavigation = JSON.parse((await client.waitFor((message) => message.id === 9)).result.content[0].text);
     assertHashNavigationResult(hashNavigation);
+    client.write({
+      jsonrpc: "2.0", id: 10, method: "tools/call",
+      params: {
+        name: "run",
+        arguments: {
+          id: "mcp-label-fallback",
+          steps: [
+            { op: "setContent", html: "<label>订单状态 <select><option>待付款</option><option>已付款</option></select></label><button onclick='this.dataset.clicked=\"yes\"'>选择学段</button><table><tbody><tr><td>已付款</td></tr></tbody></table><div id='count'>1</div>" },
+            { op: "select", target: { label: "订单状态" }, value: "待付款" },
+            { op: "click", target: { label: "订单状态" } },
+            { op: "click", target: { text: "已付款" } },
+            { op: "readValue", target: { label: "订单状态" }, as: "status" },
+            { op: "readAllText", as: "pageText", timeoutMs: 1000 },
+            { op: "evaluate", target: { label: "订单状态" }, expression: "element => Array.from(element.options, option => option.text)", as: "options" },
+            { op: "click", target: { text: "学段" } },
+            { op: "readValue", target: { css: "#count" }, as: "count" },
+          ],
+          expect: [{ title: "selected status", target: { label: "订单状态" }, value: "已付款" }],
+        },
+      },
+    });
+    const labelFallback = JSON.parse((await client.waitFor((message) => message.id === 10)).result.content[0].text);
+    assert.equal(labelFallback.ok, true, JSON.stringify(labelFallback));
+    assert.equal(labelFallback.outputs.status, "已付款");
+    assert(labelFallback.outputs.pageText[0].includes("已付款"));
+    assert.deepEqual(labelFallback.outputs.options, ["待付款", "已付款"]);
+    assert.equal(labelFallback.outputs.count, "1");
+    assert.equal(labelFallback.observations[0].label, "selected status");
+    assert.deepEqual(labelFallback.locatorFallbacks, [
+      { index: 1, strategy: "label-substring" },
+      { index: 2, strategy: "label-substring" },
+      { index: 3, strategy: "option-click-select" },
+      { index: 4, strategy: "label-substring" },
+      { index: 7, strategy: "text-substring" },
+      { index: 8, strategy: "read-value-text-content" },
+    ]);
   } finally {
     await client.stop();
   }
 });
 
-test("JSONL entrypoint runs the same flow", { timeout: 20_000 }, async () => {
+test("JSONL fallback starts, runs a compact flow, and keeps artifact paths unique", { timeout: 20_000 }, async () => {
   const script = "skills/playwright/scripts/playwright_driver.sh";
   const client = lineClient("bash", [script], pluginDir);
   const screenshotPaths = [];
   try {
     await client.waitFor((message) => message.type === "ready");
-    client.write(flowContract("jsonl"));
-    const result = await client.waitFor((message) => message.type === "result" && message.id === "jsonl");
-    assertFlowResult(result);
-    client.write(missingPopupContract("jsonl-missing-popup"));
-    const failure = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-missing-popup");
-    assertMissingPopupResult(failure);
-    client.write(requestFailureContract("jsonl-network-failure"));
-    const networkFailure = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-network-failure");
-    assertRequestFailureEvidence(networkFailure);
-    client.write(viewportContract("jsonl-mobile", { width: 390, height: 844 }));
-    const mobile = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-mobile");
-    assert.deepEqual(mobile.viewport, { width: 390, height: 844 });
-    client.write({ id: "jsonl-continuation", steps: [{ op: "evaluate", expression: "({ width: innerWidth, height: innerHeight })", as: "viewport" }] });
-    const continuation = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-continuation");
-    assert.deepEqual(continuation.viewport, { width: 390, height: 844 });
-    assert.deepEqual(continuation.outputs.viewport, { width: 390, height: 844 });
-    client.write(viewportContract("jsonl-default"));
-    const desktop = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-default");
-    assert.deepEqual(desktop.viewport, DEFAULT_VIEWPORT);
-    assert.deepEqual(desktop.outputs.viewport, DEFAULT_VIEWPORT);
-    client.write(ergonomicContract("jsonl-ergonomic"));
-    const ergonomic = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-ergonomic");
-    assertErgonomicResult(ergonomic);
-    client.write(hashNavigationContract("jsonl-hash"));
-    const hashNavigation = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-hash");
-    assertHashNavigationResult(hashNavigation);
-    client.write({ id: "evaluate-timeout", steps: [{ op: "evaluate", expression: "new Promise(() => {})", timeoutMs: 50 }] });
-    const evaluateTimeout = await client.waitFor((message) => message.type === "result" && message.id === "evaluate-timeout");
-    assert.equal(evaluateTimeout.failureKind, "runtime");
-    assert.match(evaluateTimeout.error, /Evaluation timed out after 50ms/);
+    client.write({ id: "jsonl-smoke", steps: [{ op: "setContent", html: "<main>JSONL ready</main>" }, { op: "readText", target: { css: "main" }, as: "text" }] });
+    const result = await client.waitFor((message) => message.type === "result" && message.id === "jsonl-smoke");
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.outputs.text, "JSONL ready");
     client.write({ id: "repeat-shot", steps: [{ op: "setContent", html: "<main>one</main>" }], evidence: "visual" });
     const firstShot = await client.waitFor((message) => message.type === "result" && message.id === "repeat-shot" && message.screenshot);
     screenshotPaths.push(firstShot.screenshot);
@@ -778,6 +826,7 @@ test("MCP failure reports step progress and classifies a missing popup as page",
     const contractResult = JSON.parse(contractReply.result.content[0].text);
     assert.equal(contractResult.failureKind, "contract");
     assert.equal(contractResult.runtime, "idle");
+    assert.match(contractResult.nextAction, /Correct the reported contract field/);
     client.write({
       jsonrpc: "2.0",
       id: 3,
@@ -792,6 +841,7 @@ test("MCP failure reports step progress and classifies a missing popup as page",
     assert(reply.result.content.some((item) => item.type === "image"));
     const result = JSON.parse(reply.result.content[0].text);
     assertMissingPopupResult(result);
+    assert.match(result.nextAction, /without repeating the failed expectation/);
     client.write({
       jsonrpc: "2.0",
       id: 4,

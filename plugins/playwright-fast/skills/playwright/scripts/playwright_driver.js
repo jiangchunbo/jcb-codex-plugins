@@ -13,6 +13,7 @@ const {
   recordRequestFailure,
   resolveViewport,
   screenshotTimeoutMs,
+  suggestedNextAction,
   validateContract,
 } = require("../../../shared/contract");
 
@@ -216,6 +217,7 @@ async function runContract(contract) {
       url: page?.url(),
       viewport: page?.viewportSize() || null,
       error: compactError(error),
+      nextAction: suggestedNextAction(failureKind),
       ...(stepResults.length > 0 ? { stepResults } : {}),
       ...(Object.keys(outputs).length > 0 ? { outputs } : {}),
       ...(observations.length > 0 ? { observations } : {}),

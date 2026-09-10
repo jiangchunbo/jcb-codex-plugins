@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "completed": { "type": "boolean" },
+    "answer": { "type": "string" },
+    "evidence": { "type": "string" }
+  },
+  "required": ["completed", "answer", "evidence"],
+  "additionalProperties": false
+}

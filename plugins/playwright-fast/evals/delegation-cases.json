@@ -1,0 +1,26 @@
+[
+  {
+    "id": "browser-primary-direct",
+    "title": "浏览器主任务直接执行",
+    "expectedDelegation": false,
+    "prompt": "这是一个纯浏览器主任务。使用 $playwright 打开 ${FIXTURE_URL}/form?run=${RUN_ID}，将客户姓名填写为陈伟、订单状态选择为已付款并查询，最后告诉我第一条金额。",
+    "finalIncludes": ["268.00"],
+    "oracle": { "search": "陈伟|已付款" }
+  },
+  {
+    "id": "stateful-flow-direct",
+    "title": "依赖同一页面状态时直接执行",
+    "expectedDelegation": false,
+    "prompt": "这是一个需要保持同一浏览器现场的连续任务。使用 $playwright 打开 ${FIXTURE_URL}/reload?run=${RUN_ID}，点击一次增加计数，继续在同一现场刷新页面，再告诉我刷新后的计数。",
+    "finalIncludes": ["1"],
+    "oracle": { "count": "1" }
+  },
+  {
+    "id": "independent-verification-delegated",
+    "title": "较大任务中的独立浏览器验收",
+    "expectedDelegation": true,
+    "prompt": "这是一项以非浏览器审计为主的任务，并带有一个互不依赖、可并行的页面验收。主任务：只读 ${RUNTIME_PATH}、同目录的 .mcp.json 和 scripts/resolve-runtime.js，报告 playwrightVersion、chromiumRevision、chromiumVersion，以及 MCP 暴露的三个工具名称；不要修改文件。独立页面验收：使用 $playwright 打开 ${FIXTURE_URL}/form?run=${RUN_ID}，只用假数据填写“客户姓名”为陈伟，在“订单状态”控件选择已付款并查询，核验第一条金额为 268.00，提供实际观察证据。最终汇总审计与页面验收结果。",
+    "finalIncludes": ["1.63.0", "1243", "268.00", "${CHROMIUM_VERSION}"],
+    "oracle": { "search": "陈伟|已付款" }
+  }
+]

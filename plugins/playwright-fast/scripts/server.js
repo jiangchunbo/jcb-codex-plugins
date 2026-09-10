@@ -11,6 +11,7 @@ const {
   recordRequestFailure,
   resolveViewport,
   screenshotTimeoutMs,
+  suggestedNextAction,
   validateContract,
 } = require("../shared/contract");
 
@@ -308,6 +309,7 @@ class PersistentRuntime {
           url: this.page?.url() || null,
           viewport: this.page?.viewportSize() || null,
           error: compactError(error),
+          nextAction: suggestedNextAction(failureKind),
           ...(stepResults.length > 0 ? { stepResults } : {}),
           ...(Object.keys(outputs).length > 0 ? { outputs } : {}),
           ...(observations.length > 0 ? { observations } : {}),
@@ -335,7 +337,7 @@ const tools = [
   },
   {
     name: "reset",
-    description: "Discard browser state and optionally prewarm a fresh Chromium runtime.",
+    description: "Discard corrupted or explicitly unwanted browser state. Do not call before an ordinary flow: run starts or reuses Chromium automatically, and reset:true on run provides atomic isolation when required.",
     inputSchema: {
       type: "object",
       properties: { warm: { type: "boolean", description: "Relaunch immediately; defaults true." } },

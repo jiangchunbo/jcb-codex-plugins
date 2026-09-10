@@ -7,6 +7,7 @@ Public Codex marketplace and skill source repository for reusable development to
 - `.agents/plugins/marketplace.json`: Codex marketplace metadata.
 - `plugins/playwright-fast`: Codex plugin that exposes the persistent Playwright MCP server.
 - `plugins/playwright-fast/skills`: Skills bundled with the Playwright Fast plugin.
+- `plugins/playwright-fast/evals`: natural-language Agent evaluations for Sol, Terra, and Luna, with deterministic fixtures and optional local real-page checks.
 - `skills`: Standalone skill sources that can be linked into `~/.codex/skills`.
 
 ## Install

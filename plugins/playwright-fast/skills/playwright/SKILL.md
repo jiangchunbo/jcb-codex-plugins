@@ -8,6 +8,36 @@ description: Automate a real browser for navigation, form interactions, screensh
 Run one real-browser flow with the smallest reliable contract. Default to the persistent
 `playwright-fast` MCP and minimal evidence.
 
+## Choose The Execution Agent
+
+Execute in the current agent when browser work is the user's primary task, the current task was
+already delegated as a browser-only task, a Playwright call has established page or login state,
+the next action depends on the same failure state, or the parent has no useful non-browser work to run
+at the same time. Continue in the same agent after the first Playwright call; do not transfer a live
+flow or assume that another agent shares its browser state.
+
+Delegate browser work only when it is a bounded, independent verification inside a larger task and
+the parent can continue useful non-browser work concurrently, or when multiple browser targets are
+independent and share no state. When either condition is met, delegation is required. Before
+starting the parent's parallel work, call `spawn_agent`
+exactly once for each independent browser target; do not merely announce delegation or call `wait`
+without a successfully returned child id. Use the collaboration subagent tool, not a user-owned
+task, with:
+
+- `model: "gpt-5.6-terra"`
+- `reasoning_effort: "medium"`
+- no inherited conversation: use `fork_turns: "none"` when that field is available, or the
+  equivalent `fork_context: false` on collaboration APIs that expose that field instead
+- a unique lowercase `task_name` describing the browser target when the API requires it
+
+Give the subagent a self-contained task containing the URL, actions, acceptance result, allowed
+fixtures or fake data, and required evidence. Tell it to use Playwright Fast directly, not modify
+business source, and not delegate again. A Playwright-dedicated subagent always executes directly.
+
+Do not automatically select `high`, `xhigh`, `max`, or a different model after a failure. Keep the
+single targeted diagnostic in the same executing agent. If collaboration or the requested model is
+unavailable, do not retry delegation; execute the browser task in the current agent.
+
 ## Run The Persistent MCP First
 
 Call the `run` tool from the `playwright-fast` MCP directly. Do not call `status` first; `run`
@@ -52,7 +82,8 @@ when required. Use a click with `"popup":"switch"` to adopt a new page atomicall
 Use `captureResponses` for real response bodies, `goto` for mid-flow navigation, `reload` to refresh
 the current page, `setInputFiles` with absolute paths for uploads, and `evaluate` only when
 declarative operations cannot express the action. Use `readValue` for form-control values and
-`maxChars` on text reads when the page can be large.
+`maxChars` on text reads when the page can be large. If `readValue` targets a non-form value
+display, the runtime returns its text content and reports the compatibility fallback.
 Use `cors:true` for
 credential-compatible route responses and OPTIONS handling. Claim that a preflight occurred only
 when captured route calls contain `cors-preflight`.
@@ -87,6 +118,8 @@ Check these contract shapes before running:
   duplicates. Clicks also fall back from a custom control's rendered placeholder text and from a
   covered read-only combobox input to its control container; these non-force fallbacks are reported
   in `locatorFallbacks`.
+- Text and label targets without an explicit `exact` setting retry one substring match when no exact
+  match exists; ambiguous matches still fail normally.
 
 New-document flows default to a `1440x900` viewport. Continuation contracts without a top-level
 `url`, `goto`, or `setContent` preserve the current viewport, including targeted diagnostics. The
