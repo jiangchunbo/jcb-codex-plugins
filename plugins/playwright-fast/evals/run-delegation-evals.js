@@ -47,6 +47,8 @@ function buildPrompt(task) {
     "最终返回符合 JSON Schema 的对象：completed 表示两部分均完成，answer 汇总实际结果，evidence 说明实际证据。",
     "",
     task,
+    "以下为本轮使用的 Playwright Fast 技能全文：",
+    fs.readFileSync(path.join(pluginDir, "skills/playwright/SKILL.md"), "utf8"),
   ].join("\n");
 }
 
@@ -212,11 +214,11 @@ function scoreDelegation({ model, testCase, runId, execution, oracle }) {
     (!testCase.expectedDelegation || delegationCalls[0].receiverThreadIds.length === 1);
   const call = delegationCalls[0];
   const delegationConfigPassed = !testCase.expectedDelegation || Boolean(
-    call?.args?.model === "gpt-5.6-terra" &&
-    call?.args?.reasoning_effort === "medium" &&
+    call?.args?.model === "gpt-5.6-luna" &&
+    call?.args?.reasoning_effort === "low" &&
     (call.forkModePassed || call.args.fork_turns === "none" || call.args.fork_context === false) &&
-    (!call.childModel || call.childModel === "gpt-5.6-terra") &&
-    (!call.childEffort || call.childEffort === "medium"),
+    (!call.childModel || call.childModel === "gpt-5.6-luna") &&
+    (!call.childEffort || call.childEffort === "low"),
   );
   const assignment = String(call?.args?.message || "");
   const assignmentTextPassed = assignment.includes(runId) &&
@@ -306,7 +308,7 @@ function markdown(aggregate, results) {
     `- Overall success: ${aggregate.summary.successRate}%\n` +
     `- Delegation decision accuracy: ${aggregate.summary.decisionRate}%\n` +
     `- Required execution-lane accuracy: ${aggregate.summary.executionLaneRate}%\n` +
-    `- Terra/medium configuration accuracy: ${aggregate.summary.configRate}%\n` +
+    `- Luna/low configuration accuracy: ${aggregate.summary.configRate}%\n` +
     `- Self-contained assignment accuracy: ${aggregate.summary.assignmentRate}%\n` +
     `- Browser oracle success: ${aggregate.summary.browserSuccessRate}%\n` +
     `- Recursive or duplicate delegations: ${aggregate.summary.recursiveOrDuplicateDelegations}\n\n` +

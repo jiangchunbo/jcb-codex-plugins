@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require("node:fs");
 const http = require("node:http");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { createFixtureServer } = require("./fixture-server");
@@ -18,6 +19,7 @@ function parseArgs(argv) {
     mode: "smoke",
     models: defaultModels,
     concurrency: 1,
+    serviceTier: "default",
     timeoutMs: 180_000,
     includeReal: true,
     dryRun: false,
@@ -29,6 +31,8 @@ function parseArgs(argv) {
     else if (arg === "--case") options.caseId = argv[++index];
     else if (arg === "--concurrency") options.concurrency = Number(argv[++index]);
     else if (arg === "--timeout-ms") options.timeoutMs = Number(argv[++index]);
+    else if (arg === "--service-tier") options.serviceTier = argv[++index];
+    else if (arg === "--inline-skill") options.inlineSkill = true;
     else if (arg === "--skip-real") options.includeReal = false;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--results") options.resultsDir = path.resolve(argv[++index]);
@@ -41,6 +45,7 @@ function parseArgs(argv) {
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1 || options.concurrency > 6) {
     throw new Error("--concurrency must be an integer from 1 to 6");
   }
+  if (!["default", "priority"].includes(options.serviceTier)) throw new Error("Unsupported service tier");
   return options;
 }
 
@@ -48,19 +53,21 @@ function usage() {
   return `Usage: node evals/run-agent-evals.js [options]
 
   --mode smoke|first-pass|layered|full  Default: smoke
-  --models model-a,model-b              Default: Sol, Terra, Luna
-  --case case-id                        Run one case only
+  --models model[@effort],...           Effort defaults to medium
+  --case case-id,case-id                Run selected cases
   --concurrency 1..6                    Default: 1
   --timeout-ms milliseconds             Default: 180000
+  --service-tier default|priority       Requested processing tier (default: default)
+  --inline-skill                        Include source skill explicitly for reproducible skill evals
   --skip-real                           Exclude the two real-project cases
   --results absolute-or-relative-path   Override output directory
   --dry-run                             Print the schedule without invoking Codex
 
 Modes:
   smoke       Three representative fixture cases per model (9 runs)
-  first-pass  Every selected case once per model (up to 45 runs)
+  first-pass  Every selected case once per model (up to 48 runs)
   layered     First pass plus two extra core repetitions and failed-case reruns (cap 90)
-  full        Every selected case three times per model (up to 135 runs)`;
+  full        Every selected case three times per model (up to 144 runs)`;
 }
 
 function timestamp() {
@@ -125,7 +132,7 @@ function replaceTokens(value, tokens) {
   return Object.entries(tokens).reduce((text, [key, replacement]) => text.replaceAll(`\${${key}}`, replacement), value);
 }
 
-function buildPrompt(testCase, tokens) {
+function buildPrompt(testCase, tokens, inlineSkill = false) {
   const task = replaceTokens(testCase.prompt, tokens);
   return [
     "使用 $playwright 完成下面的浏览器任务。",
@@ -135,14 +142,15 @@ function buildPrompt(testCase, tokens) {
     "最终返回符合给定 JSON Schema 的对象：completed 表示浏览器检查任务是否执行完成（即使确认目标不存在也应为 true），answer 是答案，evidence 是实际观察依据。",
     "",
     task,
+    ...(inlineSkill ? ["", "以下为本轮使用的 Playwright Fast 技能全文：", typeof inlineSkill === "string" ? inlineSkill : fs.readFileSync(path.join(pluginDir, "skills/playwright/SKILL.md"), "utf8")] : []),
   ].join("\n");
 }
 
 function createSchedule(selectedCases, models, mode) {
   const schedule = [];
   const addRound = (roundCases, repeat) => {
-    for (const model of models) {
-      for (const testCase of roundCases) schedule.push({ model, testCase, repeat });
+    for (const testCase of roundCases) {
+      for (const model of models) schedule.push({ model, testCase, repeat });
     }
   };
   if (mode === "smoke") {
@@ -171,12 +179,15 @@ function parseJsonLines(stdout) {
   return events;
 }
 
-function runCodex({ model, prompt, timeoutMs, ephemeral = true }) {
+function runCodex({ model, prompt, timeoutMs, ephemeral = true, serviceTier = "default" }) {
   return new Promise((resolve) => {
+    const [modelSlug, effort = "medium"] = model.split("@");
     const sourceMcp = `mcp_servers.playwright-fast={command="bash",args=["./scripts/start.sh"],cwd=${JSON.stringify(pluginDir)},env={PLAYWRIGHT_FAST_TTL_MS="1800000"},startup_timeout_sec=5,tool_timeout_sec=60,enabled_tools=["run","reset","status"]}`;
     const args = [
       "exec", ...(ephemeral ? ["--ephemeral"] : []), "--json", "--color", "never",
-      "--model", model,
+      "--model", modelSlug,
+      "--config", `model_reasoning_effort="${effort}"`,
+      "--config", `service_tier="${serviceTier}"`,
       "--sandbox", "danger-full-access",
       "--config", "approval_policy=\"never\"",
       "--cd", pluginDir,
@@ -188,7 +199,11 @@ function runCodex({ model, prompt, timeoutMs, ephemeral = true }) {
     ];
     const startedAt = Date.now();
     const child = spawn("codex", args, { cwd: pluginDir, stdio: ["ignore", "pipe", "pipe"] });
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
     let stdout = "";
+    let pending = "";
+    const timedEvents = [];
     let stderr = "";
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -196,7 +211,15 @@ function runCodex({ model, prompt, timeoutMs, ephemeral = true }) {
       child.kill("SIGTERM");
       setTimeout(() => child.exitCode === null && child.kill("SIGKILL"), 3000).unref();
     }, timeoutMs);
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      pending += chunk;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop();
+      for (const line of lines) {
+        try { timedEvents.push({ ...JSON.parse(line), observedAtMs: Date.now() - startedAt }); } catch {}
+      }
+    });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
     child.on("error", (error) => {
       clearTimeout(timer);
@@ -204,7 +227,10 @@ function runCodex({ model, prompt, timeoutMs, ephemeral = true }) {
     });
     child.on("close", (exitCode) => {
       clearTimeout(timer);
-      resolve({ exitCode, timedOut, elapsedMs: Date.now() - startedAt, stdout, stderr, events: parseJsonLines(stdout) });
+      if (pending.trim()) {
+        try { timedEvents.push({ ...JSON.parse(pending), observedAtMs: Date.now() - startedAt }); } catch {}
+      }
+      resolve({ serviceTier, exitCode, timedOut, elapsedMs: Date.now() - startedAt, stdout, stderr, events: timedEvents });
     });
   });
 }
@@ -243,7 +269,7 @@ async function main() {
   }
 
   let selectedCases = cases.filter((entry) => options.includeReal || entry.group !== "real");
-  if (options.caseId) selectedCases = selectedCases.filter((entry) => entry.id === options.caseId);
+  if (options.caseId) selectedCases = selectedCases.filter((entry) => options.caseId.split(",").includes(entry.id));
   if (selectedCases.length === 0) throw new Error("No evaluation cases selected");
   const schedule = createSchedule(selectedCases, options.models, options.mode);
   if (options.dryRun) {
@@ -253,6 +279,14 @@ async function main() {
 
   const resultsDir = options.resultsDir || path.join(evalDir, "results", timestamp());
   fs.mkdirSync(resultsDir, { recursive: true });
+  const skillText = fs.readFileSync(path.join(pluginDir, "skills/playwright/SKILL.md"), "utf8");
+  fs.writeFileSync(path.join(resultsDir, "manifest.json"), JSON.stringify({
+    startedAt: new Date().toISOString(), options, requestedServiceTier: options.serviceTier,
+    runtime: JSON.parse(fs.readFileSync(path.join(pluginDir, "runtime.json"), "utf8")),
+    skillDelivery: options.inlineSkill ? "inline source" : "implicit installed skill reference; loading unverified",
+    sourceSkillSha256: crypto.createHash("sha256").update(skillText).digest("hex"),
+  }, null, 2));
+  if (options.inlineSkill) fs.writeFileSync(path.join(resultsDir, "skill.md"), skillText);
   const fixture = createFixtureServer();
   const fixtureOrigin = await fixture.start();
   const startedServers = [];
@@ -287,8 +321,8 @@ async function main() {
         UNI_URL: uniOrigin,
         RUN_ID: runId,
         UPLOAD_PATH: path.join(pluginDir, "runtime.json"),
-      });
-      const execution = await runCodex({ model, prompt, timeoutMs: options.timeoutMs });
+      }, options.inlineSkill ? skillText : false);
+      const execution = await runCodex({ model, prompt, timeoutMs: options.timeoutMs, serviceTier: options.serviceTier });
       const oracle = await readOracle(fixtureOrigin, runId);
       const record = scoreRun({ model, testCase, repeat, runId, prompt, oracle, execution });
       const filename = `${String(index + 1).padStart(3, "0")}-${testCase.id}-${model}-${repeat}.json`;
@@ -317,8 +351,8 @@ async function main() {
           const prompt = buildPrompt(testCase, {
             FIXTURE_URL: fixtureOrigin, ADMIN_URL: adminOrigin, UNI_URL: uniOrigin,
             RUN_ID: runId, UPLOAD_PATH: path.join(pluginDir, "runtime.json"),
-          });
-          const execution = await runCodex({ model, prompt, timeoutMs: options.timeoutMs });
+          }, options.inlineSkill ? skillText : false);
+          const execution = await runCodex({ model, prompt, timeoutMs: options.timeoutMs, serviceTier: options.serviceTier });
           const oracle = await readOracle(fixtureOrigin, runId);
           const record = scoreRun({ model, testCase, repeat, runId, prompt, oracle, execution });
           const filename = `${String(offset + index + 1).padStart(3, "0")}-${testCase.id}-${model}-${repeat}.json`;

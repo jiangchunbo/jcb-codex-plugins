@@ -24,11 +24,16 @@ exactly once for each independent browser target; do not merely announce delegat
 without a successfully returned child id. Use the collaboration subagent tool, not a user-owned
 task, with:
 
-- `model: "gpt-5.6-terra"`
-- `reasoning_effort: "medium"`
+- `model: "gpt-5.6-luna"`
+- `reasoning_effort: "low"` for routine controls, reads, and frame/popup flows; choose `"medium"`
+  before starting multi-page constraint comparisons or chained review/confirmation/persistence tasks
 - no inherited conversation: use `fork_turns: "none"` when that field is available, or the
   equivalent `fork_context: false` on collaboration APIs that expose that field instead
 - a unique lowercase `task_name` describing the browser target when the API requires it
+
+These defaults prioritize observed task latency. Honor an explicitly requested model or effort.
+For GPT-5.5, use low for routine flows and medium for the multi-stage tasks above. Do not infer
+that fewer reasoning tokens or higher token/s necessarily means faster completion.
 
 Give the subagent a self-contained task containing the URL, actions, acceptance result, allowed
 fixtures or fake data, and required evidence. Tell it to use Playwright Fast directly, not modify
@@ -64,6 +69,30 @@ Use the MCP tools as follows:
 - `reset`: discard runtime state only after corruption, explicit isolation, or a user request.
 - `status`: inspect warmth and the 30-minute idle TTL only when that state matters.
 
+The MCP automatically learns direct versus inherited HTTP/HTTPS proxy connection quality locally.
+Do not run a speed test or query `status` before each call. Without a supported inherited proxy it
+stays direct and starts no relay or probes. Local, private, and `NO_PROXY` targets stay direct.
+Routes remain fixed within the browser context except for connection failure before request/tunnel
+delivery; a faster measured route applies to the next context. The relay never replays business
+requests. Do not reset a working context just to obtain a faster route.
+
+Use `status` or `diag` routing summaries only to diagnose network behavior. An explicit
+`reset` with `{"clearRouting":true}` discards learned statistics as well as browser state;
+ordinary reset retains statistics. Set `PLAYWRIGHT_FAST_ROUTING=off` before server startup to
+restore the previous browser networking behavior. This controls browser traffic only, not model
+API routing or model speed tiers. For routing limitations, cache details, and troubleshooting,
+read [references/routing.md](references/routing.md).
+
+Routing diagnostics include separate connection phases and top-level navigation wait timing.
+Do not treat them as model thinking time or page throughput. The experimental
+`PLAYWRIGHT_FAST_CONNECT_RACE=on` setting competes only for a target's first connection in the
+context after 250 ms; it defaults off. No extra model-side probe or retry is needed.
+
+The MCP uses a local PAC configuration to distinguish WS from WSS before CONNECT. WS uses the
+HTTP proxy setting and WSS uses HTTPS; missing settings remain direct. HTTP connections are reused
+within the context and route. If a later check fails after a form was saved, report the partial
+outcome and do not replay the workflow automatically.
+
 The repository installer provisions the plugin's pinned Playwright and Chromium runtime. Do not
 repair a missing browser with an unversioned `npx playwright install`; rerun the repository
 installer so the library and browser revision stay aligned. `PLAYWRIGHT_EXECUTABLE_PATH` is an
@@ -72,6 +101,29 @@ explicit system-browser override, not the default launch path.
 If MCP `run` is unavailable or lacks a required capability, read
 [references/fallbacks.md](references/fallbacks.md) and select the first viable fallback. Do not load
 that reference for normal MCP work.
+
+## Keep Model Turns and Evidence Small
+
+Optimize successful end-to-end completion, not token/s alone: extra reasoning, narration, tool
+round trips, and recovery can outweigh browser runtime. For a short flow, give one brief progress
+update and the final observed result; add updates when work runs long or a material failure changes
+what the user needs to know.
+
+When controls are known, batch actions and final reads. On an unfamiliar page, take one scoped
+read to discover controls, then batch the dependent actions. Do not guess hidden option values:
+for a native select, use `value: {"label":"visible option label"}` or first inspect actual options.
+Scope success checks to the result/receipt container so hidden options with the same text do not
+win the match. A top-level `ready` must remain valid before every step; put waits for later states
+after the action that creates them. Keep `domcontentloaded` and locator-based readiness; use neither `networkidle` nor fixed sleeps
+unless a specific requirement justifies them. Do not increase timeouts to compensate for an
+unverified locator or guessed value.
+
+Read the smallest relevant container, bound text with `maxChars`, and return only fields needed
+for the next decision. Whole-body `readText`/`readAllText` uses textContent and can include scripts
+and hidden text: for rendered discovery, use a scoped `evaluate` returning `element.innerText`,
+or extract named table/form fields. Preserve labels, row identity, units, errors, and selected
+values when compressing evidence. Do not summarize away distinctions needed to choose a target,
+encode evidence as gzip/base64, or substitute cached observations for a fresh post-action check.
 
 ## Build One Reliable Contract
 

@@ -86,7 +86,8 @@ function oracleMatches(actual, expected = {}) {
 }
 
 function classify(record) {
-  if (record.execution.timedOut || record.execution.exitCode !== 0 || record.metrics.playwrightCalls === 0) return "environment";
+  if (record.execution.timedOut) return record.metrics.playwrightCalls > 0 ? "task-timeout" : "environment";
+  if (record.execution.exitCode !== 0 || record.metrics.playwrightCalls === 0) return "environment";
   if (record.toolCalls.some((call) => /requires approval|tool.*unavailable|server.*unavailable/i.test(JSON.stringify(call.error || "")))) return "environment";
   if (record.metrics.unrelatedToolCalls > 0 || !record.metrics.firstRunContractValid) return "model-misuse";
   if (record.testCase.diagnostic && record.finalChecksPassed) return "expected-business-failure";
@@ -102,6 +103,68 @@ function classify(record) {
   return "none";
 }
 
+// CLI events expose item boundaries, not token deltas or server-side reasoning time.
+function timingMetrics(execution) {
+  const events = execution.events || [];
+  const starts = new Map();
+  const intervals = [];
+  let firstBrowserActionMs = null;
+  for (const event of events) {
+    const item = event.item;
+    if (!item || !Number.isFinite(event.observedAtMs)) continue;
+    const isTool = item.type === "mcp_tool_call" || item.type === "command_execution";
+    if (!isTool) continue;
+    if (event.type === "item.started") {
+      starts.set(item.id, event.observedAtMs);
+      if (firstBrowserActionMs === null && /playwright[-_]fast/.test(item.server || "")) firstBrowserActionMs = event.observedAtMs;
+    }
+    if (event.type === "item.completed" && starts.has(item.id)) {
+      intervals.push([starts.get(item.id), event.observedAtMs]);
+      starts.delete(item.id);
+    }
+  }
+  intervals.sort((a, b) => a[0] - b[0]);
+  let toolWallMs = 0, end = 0;
+  for (const [start, stop] of intervals) {
+    toolWallMs += Math.max(0, stop - Math.max(start, end));
+    end = Math.max(end, stop);
+  }
+  const usage = events.find(event => event.type === "turn.completed")?.usage;
+  const observed = events.some(event => Number.isFinite(event.observedAtMs));
+  return {
+    firstBrowserActionMs,
+    toolWallMs: observed ? toolWallMs : null,
+    nonToolWallMs: observed ? Math.max(0, execution.elapsedMs - toolWallMs) : null,
+    outputTokens: usage?.output_tokens ?? null,
+    reasoningOutputTokens: usage?.reasoning_output_tokens ?? null,
+    inputTokens: usage?.input_tokens ?? null,
+    cachedInputTokens: usage?.cached_input_tokens ?? null,
+    effectiveOutputTokensPerSecond: usage?.output_tokens != null && execution.elapsedMs > 0
+      ? usage.output_tokens / (execution.elapsedMs / 1000) : null,
+    reasoningTimeMs: null,
+    decodingTokensPerSecond: null,
+  };
+}
+
+function hasReloadEvidence(runCalls, needles) {
+  if (!needles) return true;
+  let reloaded = false;
+  const defaults = { evaluate: "evaluation", readText: "text", readAllText: "texts", readValue: "value" };
+  for (const call of runCalls) {
+    const steps = call.args?.steps || [];
+    const executed = index => call.result?.ok === true || call.result?.stepResults?.some(step => step.index === index && step.ok);
+    for (let index = 0; index < steps.length; index += 1) {
+      if (!executed(index)) continue;
+      const step = steps[index];
+      if (step.op === "reload") reloaded = true;
+      if (!reloaded || !defaults[step.op]) continue;
+      const value = call.result?.outputs?.[step.as || defaults[step.op]];
+      if (value !== undefined && includesAll(JSON.stringify(value), needles)) return true;
+    }
+  }
+  return false;
+}
+
 function scoreRun({ model, testCase, repeat, runId, prompt, oracle, execution }) {
   const items = extractItems(execution.events);
   const final = extractFinalAnswer(items);
@@ -114,6 +177,7 @@ function scoreRun({ model, testCase, repeat, runId, prompt, oracle, execution })
     includesAll(finalText, testCase.finalIncludes || []) &&
     includesAnyGroup(finalText, testCase.finalIncludesAny || []);
   const oraclePassed = oracleMatches(oracle, testCase.oracle);
+  const reloadEvidencePassed = hasReloadEvidence(runCalls, testCase.afterReloadIncludes);
   const visualPassed = !testCase.requiresVisual || runCalls.some((call) => call.args?.evidence === "visual");
   const hasSuccessfulRun = runCalls.some((call) => call.result?.ok === true);
   const hasUsablePageEvidence = runCalls.some((call) =>
@@ -121,23 +185,27 @@ function scoreRun({ model, testCase, repeat, runId, prompt, oracle, execution })
   );
   const hasOracleEvidence = testCase.oracle && Object.keys(testCase.oracle).length > 0 && oraclePassed;
   const callBudgetPassed = testCase.diagnostic ? runCalls.length <= 2 : runCalls.length >= 1;
-  const success = execution.exitCode === 0 && !execution.timedOut && finalChecksPassed && oraclePassed && visualPassed &&
+  const success = execution.exitCode === 0 && !execution.timedOut && finalChecksPassed && oraclePassed && reloadEvidencePassed && visualPassed &&
     (hasSuccessfulRun || hasUsablePageEvidence || hasOracleEvidence) && callBudgetPassed;
   const record = {
     model,
+    requestedServiceTier: execution.serviceTier || "default",
     caseId: testCase.id,
     title: testCase.title,
     group: testCase.group,
+    complexity: testCase.complexity || "unspecified",
     repeat,
     runId,
     success,
     finalChecksPassed,
     oraclePassed,
+    reloadEvidencePassed,
     visualPassed,
     callBudgetPassed,
     oracle,
     final,
     metrics: {
+      ...timingMetrics(execution),
       elapsedMs: execution.elapsedMs,
       playwrightElapsedMs: runCalls.reduce((total, call) => total + Number(call.result?.elapsedMs || 0), 0),
       toolCalls: toolCalls.length,
@@ -147,12 +215,16 @@ function scoreRun({ model, testCase, repeat, runId, prompt, oracle, execution })
       correctionCalls: Math.max(0, runCalls.length - 1),
       firstRunContractValid: Boolean(firstRun?.result && firstRun.result.failureKind !== "contract"),
       unnecessaryStatusCalls: playwrightCalls.filter((call) => call.action === "status").length,
-      unnecessaryResetCalls: playwrightCalls.filter((call) => call.action === "reset").length,
+      unnecessaryResetCalls: playwrightCalls.filter((call) => call.action === "reset" || call.args?.reset === true).length,
+      nonVisualTaskScreenshotCalls: testCase.requiresVisual || testCase.diagnostic ? 0 : runCalls.filter(call => ["visual", "diag"].includes(call.args?.evidence)).length,
+      networkIdleCalls: runCalls.filter(call => call.args?.waitUntil === "networkidle").length,
+      fixedWaitSteps: runCalls.reduce((sum, call) => sum + (call.args?.steps || []).filter(step => step.op === "waitForTimeout" || (step.op === "wait" && step.ms !== undefined)).length, 0),
       skillReadCalls: toolCalls.filter((call) => call.allowedSkillRead).length,
       unrelatedToolCalls: toolCalls.filter((call) => !call.isPlaywright && !call.allowedSkillRead).length,
     },
     toolCalls,
     execution: {
+      serviceTier: execution.serviceTier || "default",
       exitCode: execution.exitCode,
       timedOut: execution.timedOut,
       stderr: execution.stderr,
@@ -236,6 +308,11 @@ function summarize(entries) {
   const modelOverhead = entries.map((entry) => Math.max(0, entry.metrics.elapsedMs - entry.metrics.playwrightElapsedMs));
   return {
     runs: entries.length,
+    firstBrowserActionP50Ms: percentile(entries.map(e => e.metrics.firstBrowserActionMs).filter(Number.isFinite), 0.5),
+    nonToolWallP50Ms: percentile(entries.map(e => e.metrics.nonToolWallMs).filter(Number.isFinite), 0.5),
+    reasoningOutputTokensP50: percentile(entries.map(e => e.metrics.reasoningOutputTokens).filter(Number.isFinite), 0.5),
+    outputTokensP50: percentile(entries.map(e => e.metrics.outputTokens).filter(Number.isFinite), 0.5),
+    effectiveOutputTokensPerSecondP50: percentile(entries.map(e => e.metrics.effectiveOutputTokensPerSecond).filter(Number.isFinite), 0.5),
     successRate: percentage(entries.filter((entry) => entry.success).length, entries.length),
     fixtureSuccessRate: percentage(fixture.filter((entry) => entry.success).length, fixture.length),
     realSuccessRate: percentage(real.filter((entry) => entry.success).length, real.length),
@@ -283,6 +360,10 @@ function markdownReport(results, aggregateResult) {
     `## By Model\n\n` +
     `| Model | Runs | Success | Fixture | Real | First contract valid | Median runs | E2E P50/P95 ms | Model overhead P50/P95 ms | Plugin P50/P95 ms |\n` +
     `|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n${rows.join("\n")}\n\n` +
+    `## Observed latency and effective token rate\n\n` +
+    `Non-tool wall time includes startup, prefill, network, queuing, reasoning and generation; it is not reasoning time. Effective token/s is output usage divided by total wall time, not decoding throughput. CLI exposes neither token deltas nor isolated reasoning time.\n\n` +
+    `| Configuration | First browser action P50 ms | Non-tool wall P50 ms | Output tokens P50 | Effective output token/s P50 |\n|---|---:|---:|---:|---:|\n` +
+    Object.entries(byModel).map(([model, m]) => `| ${model} | ${m.firstBrowserActionP50Ms ?? "N/A"} | ${m.nonToolWallP50Ms ?? "N/A"} | ${m.outputTokensP50 ?? "N/A"} | ${m.effectiveOutputTokensPerSecondP50?.toFixed(1) ?? "N/A"} |`).join("\n") + "\n\n" +
     `## Failures\n\n` +
     (failed.length === 0 ? "None.\n" : failed.map((entry) => `- ${entry.model} / ${entry.caseId} #${entry.repeat}: ${entry.classification}`).join("\n") + "\n") +
     `\n## Attribution\n\n` +
@@ -343,4 +424,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { aggregate, extractToolCalls, findResult, markdownReport, percentile, scoreRun, writeReport };
+module.exports = { hasReloadEvidence, timingMetrics, aggregate, extractToolCalls, findResult, markdownReport, percentile, scoreRun, writeReport };

@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const readline = require("node:readline");
+const { Router } = require("./routing");
 const {
   DEFAULT_NAVIGATION_TIMEOUT_MS,
   DEFAULT_TIMEOUT_MS,
@@ -38,6 +39,8 @@ class PersistentRuntime {
     this.context = null;
     this.page = null;
     this.launchPromise = null;
+    this.routing = null;
+    this.lastRoutingStatus = null;
     this.expiryTimer = null;
     this.startedAt = null;
     this.lastUsedAt = null;
@@ -76,7 +79,11 @@ class PersistentRuntime {
       if (message.type() === "error") this.consoleErrors.push(message.text());
     });
     page.on("pageerror", (error) => this.pageErrors.push(error.message));
-    page.on("requestfailed", (request) => recordRequestFailure(this.requestFailures, request));
+    page.on("request", request => this.routing?.noteBrowserRequest(request));
+    page.on("requestfailed", (request) => {
+      recordRequestFailure(this.requestFailures, request);
+      this.routing?.noteBrowserFailure(request);
+    });
   }
 
   adoptPage(page) {
@@ -103,8 +110,14 @@ class PersistentRuntime {
         `Run: ${INSTALL_COMMAND || "the playwright-fast runtime installer"}`,
       ].join("\n"));
     }
-    this.browser = await chromium.launch({ headless: true, executablePath: BROWSER_EXECUTABLE_PATH });
-    await this.createContext();
+    this.routing = new Router();
+    try {
+      await this.routing.start();
+      this.browser = await chromium.launch({ headless: true, executablePath: BROWSER_EXECUTABLE_PATH,
+        args: this.routing.browserArgs(),
+      });
+      await this.createContext();
+    } catch (error) { await this.dispose(); throw error; }
     this.startedAt = Date.now();
     this.launches += 1;
     this.touch();
@@ -132,12 +145,23 @@ class PersistentRuntime {
     this.startedAt = null;
     this.lastUsedAt = null;
     if (browser) await browser.close().catch(() => {});
+    if (this.routing) {
+      await this.routing.close();
+      this.lastRoutingStatus = this.routing.status();
+      this.routing = null;
+    }
   }
 
-  async reset(warm = true) {
+  async reset(warm = true, clearRouting = false) {
     const started = performance.now();
     if (this.launchPromise) await this.launchPromise.catch(() => {});
     await this.dispose();
+    if (clearRouting) {
+      const router = new Router();
+      await router.clear();
+      this.lastRoutingStatus = router.status();
+      await router.close();
+    }
     this.resets += 1;
     if (warm) await this.ensure();
     return { ...(await this.status()), elapsedMs: Math.round(performance.now() - started) };
@@ -148,6 +172,7 @@ class PersistentRuntime {
     const now = Date.now();
     return {
       warm,
+      routing: this.routing?.status() || this.lastRoutingStatus || { mode: "not-started" },
       ttlMs: this.ttlMs,
       expiresInMs: warm ? Math.max(0, this.ttlMs - (now - this.lastUsedAt)) : 0,
       uptimeMs: warm ? now - this.startedAt : 0,
@@ -187,6 +212,7 @@ class PersistentRuntime {
     try {
       validateContract(contract);
       coldStarted = contract.reset ? (await this.reset(true), true) : await this.ensure();
+      await this.routing?.refreshNetwork();
       this.defaultTimeoutMs = positiveInteger(contract.timeoutMs, DEFAULT_TIMEOUT_MS);
       this.defaultNavigationTimeoutMs = positiveInteger(contract.navigationTimeoutMs, DEFAULT_NAVIGATION_TIMEOUT_MS);
       this.attachPage(this.page);
@@ -221,10 +247,15 @@ class PersistentRuntime {
       }
       if (contract.url) {
         phase = "navigation";
-        await flow.navigate(contract.url, {
-          waitUntil: contract.waitUntil,
-          timeoutMs: this.defaultNavigationTimeoutMs,
-        });
+        const navigationStarted = performance.now();
+        let outcome = "ok";
+        try {
+          await flow.navigate(contract.url, {
+            waitUntil: contract.waitUntil,
+            timeoutMs: this.defaultNavigationTimeoutMs,
+          });
+        } catch (error) { outcome = "failed"; throw error; }
+        finally { this.routing?.recordMetric({ kind: "navigation", outcome, navigationMs: performance.now() - navigationStarted }); }
       }
       if (contract.ready) {
         phase = "ready";
@@ -272,6 +303,8 @@ class PersistentRuntime {
           ok: !healthFailure,
           id: String(contract.id || "flow").slice(0, 80),
           runtime: runtimeLabel(),
+          ...(evidence === "diag" ? { routing: this.routing?.status() } : {}),
+          ...(this.routing?.config.warnings.length ? { routingWarnings: this.routing.config.warnings } : {}),
           elapsedMs: Math.round(performance.now() - started),
           url: this.page.url(),
           viewport: this.page.viewportSize(),
@@ -303,6 +336,8 @@ class PersistentRuntime {
           ok: false,
           id: String(contract?.id || "flow").slice(0, 80),
           runtime: runtimeLabel(),
+          ...(evidence === "diag" ? { routing: this.routing?.status() } : {}),
+          ...(this.routing?.config.warnings.length ? { routingWarnings: this.routing.config.warnings } : {}),
           phase,
           failureKind,
           elapsedMs: Math.round(performance.now() - started),
@@ -340,7 +375,7 @@ const tools = [
     description: "Discard corrupted or explicitly unwanted browser state. Do not call before an ordinary flow: run starts or reuses Chromium automatically, and reset:true on run provides atomic isolation when required.",
     inputSchema: {
       type: "object",
-      properties: { warm: { type: "boolean", description: "Relaunch immediately; defaults true." } },
+      properties: { warm: { type: "boolean", description: "Relaunch immediately; defaults true." }, clearRouting: { type: "boolean", description: "Clear learned routing statistics for this machine; defaults false." } },
       additionalProperties: false,
     },
   },
@@ -374,7 +409,7 @@ async function callTool(name, args) {
     return { content, isError: toolExecutionFailed };
   }
   if (name === "reset") {
-    const result = await runtime.reset(args?.warm !== false);
+    const result = await runtime.reset(args?.warm !== false, args?.clearRouting === true);
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
   if (name === "status") return { content: [{ type: "text", text: JSON.stringify(await runtime.status()) }] };

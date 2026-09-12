@@ -1,0 +1,3554 @@
+{
+  "measuredAt": "2026-09-12T03:35:08.221Z",
+  "repetitions": 5,
+  "proxyScope": "http",
+  "runtime": {
+    "ok": true,
+    "nodeModules": "/home/jcb/.codex/runtimes/playwright-fast/1.63.0/node_modules",
+    "playwrightVersion": "1.63.0",
+    "chromiumRevision": "1243",
+    "chromiumVersion": "153.0.8010.12",
+    "browserExecutablePath": "/home/jcb/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+    "browserSource": "playwright-managed"
+  },
+  "scenarios": {
+    "normal": {
+      "direct": 0,
+      "proxy": 0
+    },
+    "direct-slow": {
+      "direct": 450,
+      "proxy": 10
+    },
+    "proxy-slow": {
+      "direct": 10,
+      "proxy": 450
+    },
+    "direct-refused": {
+      "direct": 10,
+      "proxy": 10,
+      "failed": "direct"
+    },
+    "proxy-refused-warm": {
+      "direct": 10,
+      "proxy": 10,
+      "failed": "proxy",
+      "warm": true
+    },
+    "direct-timeout": {
+      "direct": 3000,
+      "proxy": 10
+    }
+  },
+  "scope": "Local HTTP and WebSocket Chromium journeys; controlled connection delays before real TCP/CONNECT. Direct uses the same relay; not a native-direct overhead comparison. Fresh browser/PAC, context, and cache per run except explicitly seeded warm statistics; browser launch excluded. No model API or public network.",
+  "summary": [
+    {
+      "scenario": "normal",
+      "mode": "direct",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 219.0104749999955,
+      "successP95Ms": 228.05216800000005,
+      "attemptP95Ms": 228.05216800000005,
+      "meanConnectionAttempts": 17.2,
+      "meanOriginConnections": 17.2,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "auto",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 209.31151300000056,
+      "successP95Ms": 218.30727100000001,
+      "attemptP95Ms": 218.30727100000001,
+      "meanConnectionAttempts": 18.8,
+      "meanOriginConnections": 18.8,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "race",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 207.8636220000044,
+      "successP95Ms": 222.80231100000015,
+      "attemptP95Ms": 222.80231100000015,
+      "meanConnectionAttempts": 17.8,
+      "meanOriginConnections": 17.8,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "native",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 201.91781199999969,
+      "successP95Ms": 213.1965049999999,
+      "attemptP95Ms": 213.1965049999999,
+      "meanConnectionAttempts": null,
+      "meanOriginConnections": 7,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "direct",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 1872.1772420000016,
+      "successP95Ms": 1892.058195000005,
+      "attemptP95Ms": 1892.058195000005,
+      "meanConnectionAttempts": 11,
+      "meanOriginConnections": 7,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "auto",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 1882.0790049999996,
+      "successP95Ms": 1901.412983000002,
+      "attemptP95Ms": 1901.412983000002,
+      "meanConnectionAttempts": 13,
+      "meanOriginConnections": 9,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "race",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 473.2329279999976,
+      "successP95Ms": 481.8417790000003,
+      "attemptP95Ms": 481.8417790000003,
+      "meanConnectionAttempts": 19,
+      "meanOriginConnections": 18,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "direct",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 230.02432800001407,
+      "successP95Ms": 239.8772859999999,
+      "attemptP95Ms": 239.8772859999999,
+      "meanConnectionAttempts": 11.4,
+      "meanOriginConnections": 11.4,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "auto",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 220.30066399999487,
+      "successP95Ms": 233.9832779999997,
+      "attemptP95Ms": 233.9832779999997,
+      "meanConnectionAttempts": 13,
+      "meanOriginConnections": 12,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "race",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 225.23820700000215,
+      "successP95Ms": 231.73346300000048,
+      "attemptP95Ms": 231.73346300000048,
+      "meanConnectionAttempts": 13,
+      "meanOriginConnections": 12,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "direct",
+      "runs": 5,
+      "successes": 0,
+      "successP50Ms": null,
+      "successP95Ms": null,
+      "attemptP95Ms": 60.311218000002555,
+      "meanConnectionAttempts": 1,
+      "meanOriginConnections": 0,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "auto",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 237.30648400000064,
+      "successP95Ms": 250.60200800000166,
+      "attemptP95Ms": 250.60200800000166,
+      "meanConnectionAttempts": 19,
+      "meanOriginConnections": 17,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "race",
+      "runs": 5,
+      "successes": 4,
+      "successP50Ms": 233.328010000012,
+      "successP95Ms": 245.70513600000413,
+      "attemptP95Ms": 6375.270313999999,
+      "meanConnectionAttempts": 17.2,
+      "meanOriginConnections": 15.2,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "direct",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 220.81538400000136,
+      "successP95Ms": 225.65067800000543,
+      "attemptP95Ms": 225.65067800000543,
+      "meanConnectionAttempts": 11,
+      "meanOriginConnections": 11,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "auto",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 234.06265000000712,
+      "successP95Ms": 243.0988810000017,
+      "attemptP95Ms": 243.0988810000017,
+      "meanConnectionAttempts": 12,
+      "meanOriginConnections": 11,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "race",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 231.5511320000005,
+      "successP95Ms": 241.25707199999306,
+      "attemptP95Ms": 241.25707199999306,
+      "meanConnectionAttempts": 12,
+      "meanOriginConnections": 11,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "direct",
+      "runs": 5,
+      "successes": 0,
+      "successP50Ms": null,
+      "successP95Ms": null,
+      "attemptP95Ms": 2046.3995159999977,
+      "meanConnectionAttempts": 1,
+      "meanOriginConnections": 0,
+      "meanProbes": 0,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "auto",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 2230.3613509999996,
+      "successP95Ms": 2973.3718489999956,
+      "attemptP95Ms": 2973.3718489999956,
+      "meanConnectionAttempts": 18.6,
+      "meanOriginConnections": 16.6,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "race",
+      "runs": 5,
+      "successes": 5,
+      "successP50Ms": 473.9842640000061,
+      "successP95Ms": 481.79601399999956,
+      "attemptP95Ms": 481.79601399999956,
+      "meanConnectionAttempts": 18.8,
+      "meanOriginConnections": 16.8,
+      "meanProbes": 2,
+      "duplicatePosts": 0
+    }
+  ],
+  "taskFailures": 11,
+  "duplicatePostTasks": 0,
+  "rows": [
+    {
+      "scenario": "normal",
+      "mode": "direct",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 228.05216800000005,
+      "phases": {
+        "navigation": 16.655414999999948,
+        "query": 86.818982,
+        "resources": 1.6929790000000366,
+        "form": 95.63515500000005,
+        "websocket": 6.500575000000026,
+        "persistence": 20.69437700000003
+      },
+      "attempts": {
+        "direct": 16,
+        "proxy": 0
+      },
+      "originConnections": 16,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "auto",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 218.30727100000001,
+      "phases": {
+        "navigation": 16.468029,
+        "query": 78.66466200000013,
+        "resources": 1.5525840000000244,
+        "form": 97.02320099999997,
+        "websocket": 5.290374000000156,
+        "persistence": 19.282499000000143
+      },
+      "attempts": {
+        "direct": 16,
+        "proxy": 1
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "race",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 222.80231100000015,
+      "phases": {
+        "navigation": 16.776914000000033,
+        "query": 82.06248300000016,
+        "resources": 1.2371049999999286,
+        "form": 98.4679349999999,
+        "websocket": 4.956510999999864,
+        "persistence": 19.285624000000098
+      },
+      "attempts": {
+        "direct": 17,
+        "proxy": 1
+      },
+      "originConnections": 18,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "native",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 202.77487400000018,
+      "phases": {
+        "navigation": 14.012618999999859,
+        "query": 72.25853199999983,
+        "resources": 1.7227470000000267,
+        "form": 95.04612999999972,
+        "websocket": 4.093374999999924,
+        "persistence": 15.624897999999575
+      },
+      "attempts": null,
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "direct",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1885.410609,
+      "phases": {
+        "navigation": 466.02433299999984,
+        "query": 80.42776299999969,
+        "resources": 778.7038469999998,
+        "form": 84.76160299999992,
+        "websocket": 456.52160099999946,
+        "persistence": 18.9511650000004
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 4
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "auto",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1901.058395,
+      "phases": {
+        "navigation": 467.33585200000016,
+        "query": 78.12491300000056,
+        "resources": 784.6037339999993,
+        "form": 95.80116199999975,
+        "websocket": 456.8344589999997,
+        "persistence": 18.339504999999917
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 9,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 4
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "race",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 481.8417790000003,
+      "phases": {
+        "navigation": 274.6176150000001,
+        "query": 70.7823269999999,
+        "resources": 1.2452640000001338,
+        "form": 98.72311100000024,
+        "websocket": 18.85455499999989,
+        "persistence": 17.603422000000137
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 18,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "direct",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 239.8772859999999,
+      "phases": {
+        "navigation": 28.603319000000738,
+        "query": 84.75228799999968,
+        "resources": 3.01692599999933,
+        "form": 92.34331699999984,
+        "websocket": 15.61513399999967,
+        "persistence": 15.52774700000009
+      },
+      "attempts": {
+        "direct": 13,
+        "proxy": 0
+      },
+      "originConnections": 13,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "auto",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 233.9832779999997,
+      "phases": {
+        "navigation": 22.559280999999828,
+        "query": 80.61818299999959,
+        "resources": 1.536312999999609,
+        "form": 97.592893,
+        "websocket": 15.947358999999778,
+        "persistence": 15.714420000000246
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 23,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "race",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 231.73346300000048,
+      "phases": {
+        "navigation": 23.751634000000195,
+        "query": 78.06928499999958,
+        "resources": 1.3054809999994177,
+        "form": 97.3320279999989,
+        "websocket": 17.37842500000079,
+        "persistence": 13.883702999999514
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "direct",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-refused-direct-0",
+      "failedPhase": "navigation",
+      "elapsedMs": 58.340728999999556,
+      "phases": {
+        "navigation": 58.32015400000091
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "auto",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 226.19614700000056,
+      "phases": {
+        "navigation": 36.11338700000124,
+        "query": 61.06592599999931,
+        "resources": 1.358962000000247,
+        "form": 96.28995300000133,
+        "websocket": 16.296621999999843,
+        "persistence": 15.055025000001478
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "race",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "locator.waitFor: Timeout 4000ms exceeded.",
+      "failedPhase": "resources",
+      "elapsedMs": 6375.270313999999,
+      "phases": {
+        "navigation": 33.02312499999971,
+        "query": 2341.1610199999996,
+        "resources": 4001.0598950000003
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 8
+      },
+      "originConnections": 8,
+      "posts": 0,
+      "resources": 6,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "direct",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 214.40850700000192,
+      "phases": {
+        "navigation": 20.766709000001356,
+        "query": 65.40211699999963,
+        "resources": 1.3303130000003875,
+        "form": 96.40396499999952,
+        "websocket": 15.266446000001451,
+        "persistence": 15.225738000001002
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "auto",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 243.0988810000017,
+      "phases": {
+        "navigation": 37.37938700000086,
+        "query": 76.54453900000226,
+        "resources": 1.3150600000008126,
+        "form": 97.84065600000031,
+        "websocket": 15.315523999997822,
+        "persistence": 14.691001999999571
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 21,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "race",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 232.10372199999983,
+      "phases": {
+        "navigation": 36.70502699999997,
+        "query": 67.7223989999984,
+        "resources": 1.622631000002002,
+        "form": 95.59134099999937,
+        "websocket": 15.494344999999157,
+        "persistence": 14.9562279999991
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "direct",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-timeout-direct-0",
+      "failedPhase": "navigation",
+      "elapsedMs": 2024.9548109999996,
+      "phases": {
+        "navigation": 2024.9352389999985
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "auto",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 2219.753987,
+      "phases": {
+        "navigation": 2023.1260999999977,
+        "query": 66.3536810000005,
+        "resources": 1.458600000001752,
+        "form": 97.29236300000048,
+        "websocket": 17.71701600000233,
+        "persistence": 13.793734000002587
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "race",
+      "repetition": 0,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 481.79601399999956,
+      "phases": {
+        "navigation": 274.77248899999904,
+        "query": 76.72166800000196,
+        "resources": 1.3528149999983725,
+        "form": 98.76025700000173,
+        "websocket": 16.099097999998776,
+        "persistence": 14.075391999998828
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 22,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 2
+    },
+    {
+      "scenario": "normal",
+      "mode": "auto",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 209.31151300000056,
+      "phases": {
+        "navigation": 17.735358000001725,
+        "query": 73.91368599999987,
+        "resources": 1.4475669999992533,
+        "form": 96.56735900000058,
+        "websocket": 4.871672000001126,
+        "persistence": 14.76166000000012
+      },
+      "attempts": {
+        "direct": 18,
+        "proxy": 1
+      },
+      "originConnections": 19,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "race",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 208.42014199999903,
+      "phases": {
+        "navigation": 16.823680999998032,
+        "query": 71.79896799999915,
+        "resources": 1.4820240000008198,
+        "form": 97.44671999999991,
+        "websocket": 5.49213299999974,
+        "persistence": 15.363059999999678
+      },
+      "attempts": {
+        "direct": 15,
+        "proxy": 1
+      },
+      "originConnections": 16,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "direct",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 206.34120099999927,
+      "phases": {
+        "navigation": 16.91002799999842,
+        "query": 70.66175700000167,
+        "resources": 1.3106379999990168,
+        "form": 98.47995000000083,
+        "websocket": 4.547536999998556,
+        "persistence": 14.417366000001493
+      },
+      "attempts": {
+        "direct": 19,
+        "proxy": 0
+      },
+      "originConnections": 19,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "native",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 200.7238670000006,
+      "phases": {
+        "navigation": 12.32611000000179,
+        "query": 69.53882100000192,
+        "resources": 1.2172080000018468,
+        "form": 100.57098599999881,
+        "websocket": 4.3183050000006915,
+        "persistence": 12.73977499999819
+      },
+      "attempts": null,
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "auto",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1882.0790049999996,
+      "phases": {
+        "navigation": 465.02844099999857,
+        "query": 64.14151299999867,
+        "resources": 787.1581019999976,
+        "form": 94.23693600000115,
+        "websocket": 457.59500599999956,
+        "persistence": 13.903486999999586
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 9,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 4
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "race",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 469.4948030000014,
+      "phases": {
+        "navigation": 274.14068699999916,
+        "query": 60.99898799999937,
+        "resources": 1.2725469999968482,
+        "form": 99.84501399999863,
+        "websocket": 16.128898999999365,
+        "persistence": 17.094561000001704
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 18,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "direct",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1872.1772420000016,
+      "phases": {
+        "navigation": 468.8842970000005,
+        "query": 64.23822999999902,
+        "resources": 780.723713000003,
+        "form": 84.82139499999903,
+        "websocket": 458.0429589999985,
+        "persistence": 15.451742000001104
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 4
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "auto",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 219.85808799999722,
+      "phases": {
+        "navigation": 23.3155880000013,
+        "query": 66.23666500000036,
+        "resources": 1.4668410000012955,
+        "form": 97.67172800000117,
+        "websocket": 15.598799999999756,
+        "persistence": 15.555247000000236
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "race",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 229.43387599999915,
+      "phases": {
+        "navigation": 26.68369000000166,
+        "query": 73.04937400000199,
+        "resources": 1.450273999998899,
+        "form": 97.79649299999801,
+        "websocket": 16.011185999999725,
+        "persistence": 14.427585000001272
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "direct",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 233.84163900000203,
+      "phases": {
+        "navigation": 23.627333000000363,
+        "query": 83.83881499999916,
+        "resources": 1.4527039999993576,
+        "form": 94.9865690000006,
+        "websocket": 15.210755000000063,
+        "persistence": 14.712537999999768
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "auto",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 239.76728400000138,
+      "phases": {
+        "navigation": 36.028824000000895,
+        "query": 72.89695700000084,
+        "resources": 1.292027000003145,
+        "form": 98.63818700000047,
+        "websocket": 16.780148999998346,
+        "persistence": 14.118155000000115
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "race",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 237.1373190000013,
+      "phases": {
+        "navigation": 35.56539300000077,
+        "query": 74.12337200000184,
+        "resources": 1.6740290000016103,
+        "form": 95.83610399999816,
+        "websocket": 16.708952999997564,
+        "persistence": 13.216768999998749
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "direct",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-refused-direct-1",
+      "failedPhase": "navigation",
+      "elapsedMs": 53.571554999998625,
+      "phases": {
+        "navigation": 53.56113600000026
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "auto",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 231.2879950000024,
+      "phases": {
+        "navigation": 33.78527000000031,
+        "query": 66.3688370000018,
+        "resources": 1.2291210000003048,
+        "form": 99.83066599999802,
+        "websocket": 15.839605000001029,
+        "persistence": 14.2230759999984
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "race",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 231.5511320000005,
+      "phases": {
+        "navigation": 33.611860000004526,
+        "query": 67.57814700000017,
+        "resources": 1.4936279999965336,
+        "form": 99.02060400000482,
+        "websocket": 15.610006000002613,
+        "persistence": 14.224030999997922
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "direct",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 225.65067800000543,
+      "phases": {
+        "navigation": 24.225532000004023,
+        "query": 74.31774399999995,
+        "resources": 1.4069610000005923,
+        "form": 96.15340899999865,
+        "websocket": 15.030963000004704,
+        "persistence": 14.502707999999984
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "auto",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 2230.3613509999996,
+      "phases": {
+        "navigation": 2028.870268999999,
+        "query": 71.69503399999667,
+        "resources": 1.2626789999994799,
+        "form": 98.80367100000149,
+        "websocket": 15.578294999999343,
+        "persistence": 14.139126000001852
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "race",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 478.50787599999603,
+      "phases": {
+        "navigation": 279.21153400000185,
+        "query": 69.80166800000006,
+        "resources": 1.413074999996752,
+        "form": 97.72918599999684,
+        "websocket": 15.9679049999977,
+        "persistence": 14.37208400000236
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 16
+      },
+      "originConnections": 16,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 2
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "direct",
+      "repetition": 1,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-timeout-direct-1",
+      "failedPhase": "navigation",
+      "elapsedMs": 2043.0012920000008,
+      "phases": {
+        "navigation": 2042.990334000002
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "race",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 207.05298100000073,
+      "phases": {
+        "navigation": 17.168013000002247,
+        "query": 67.92159900000115,
+        "resources": 1.226781999997911,
+        "form": 99.35028199999942,
+        "websocket": 5.780668000006699,
+        "persistence": 15.592193000004045
+      },
+      "attempts": {
+        "direct": 18,
+        "proxy": 1
+      },
+      "originConnections": 19,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "direct",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 214.10480700000335,
+      "phases": {
+        "navigation": 15.117661000003864,
+        "query": 78.37407299999904,
+        "resources": 1.3462610000060522,
+        "form": 99.27537499999744,
+        "websocket": 5.433572000001732,
+        "persistence": 14.545428000004904
+      },
+      "attempts": {
+        "direct": 15,
+        "proxy": 0
+      },
+      "originConnections": 15,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "auto",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 205.35819600000104,
+      "phases": {
+        "navigation": 18.66087900000275,
+        "query": 70.80636699999741,
+        "resources": 1.2448590000058175,
+        "form": 95.84872500000347,
+        "websocket": 4.693531999997504,
+        "persistence": 14.091368999994302
+      },
+      "attempts": {
+        "direct": 20,
+        "proxy": 1
+      },
+      "originConnections": 21,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "native",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 213.1965049999999,
+      "phases": {
+        "navigation": 28.15434500000265,
+        "query": 69.08649300000252,
+        "resources": 1.4699800000016694,
+        "form": 98.37159999999858,
+        "websocket": 3.553353999996034,
+        "persistence": 12.543966999997792
+      },
+      "attempts": null,
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "race",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 472.8765609999973,
+      "phases": {
+        "navigation": 278.11751200000435,
+        "query": 66.37600800000655,
+        "resources": 1.380079000002297,
+        "form": 97.55106500000693,
+        "websocket": 16.22306899999967,
+        "persistence": 13.215896000001521
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 18,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "direct",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1892.058195000005,
+      "phases": {
+        "navigation": 468.8626649999933,
+        "query": 66.81212299999606,
+        "resources": 785.626820999998,
+        "form": 95.88643299999967,
+        "websocket": 459.187331000001,
+        "persistence": 15.666624999998021
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 4
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "auto",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1876.176603,
+      "phases": {
+        "navigation": 468.9528779999964,
+        "query": 67.74065100000007,
+        "resources": 779.2940700000036,
+        "form": 86.75077000000601,
+        "websocket": 459.255041000004,
+        "persistence": 14.164842999998655
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 9,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 4
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "race",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 220.06493700000283,
+      "phases": {
+        "navigation": 22.08492799999658,
+        "query": 68.84962500000256,
+        "resources": 1.1924459999936516,
+        "form": 96.72258800000418,
+        "websocket": 15.298390000003565,
+        "persistence": 15.904615999999805
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "direct",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 215.02118399999745,
+      "phases": {
+        "navigation": 22.286173000000417,
+        "query": 60.55326600000262,
+        "resources": 1.2026429999968968,
+        "form": 99.00248100000317,
+        "websocket": 15.087067999993451,
+        "persistence": 16.873962000005122
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "auto",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 220.30066399999487,
+      "phases": {
+        "navigation": 21.567385999995167,
+        "query": 69.14285599999857,
+        "resources": 1.2998460000017076,
+        "form": 98.77764800000296,
+        "websocket": 15.551265000001877,
+        "persistence": 13.95022600000084
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "race",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 228.7964759999959,
+      "phases": {
+        "navigation": 33.54078499999741,
+        "query": 65.85627699999895,
+        "resources": 1.33688400000392,
+        "form": 99.02194299999974,
+        "websocket": 16.286167999998725,
+        "persistence": 12.741128000001481
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "direct",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-refused-direct-2",
+      "failedPhase": "navigation",
+      "elapsedMs": 59.321820999997726,
+      "phases": {
+        "navigation": 59.31106699999509
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "auto",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 236.1312789999938,
+      "phases": {
+        "navigation": 32.692815000002156,
+        "query": 72.1829429999998,
+        "resources": 1.378300999997009,
+        "form": 100.76492500000313,
+        "websocket": 16.03085099999589,
+        "persistence": 13.069280000003346
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "race",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 231.3873850000018,
+      "phases": {
+        "navigation": 32.53167100000428,
+        "query": 68.04877000000124,
+        "resources": 1.1532550000047195,
+        "form": 98.58269300000393,
+        "websocket": 15.964213000006566,
+        "persistence": 15.093682000006083
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "direct",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 219.31374000000505,
+      "phases": {
+        "navigation": 22.5079440000045,
+        "query": 65.92935299999954,
+        "resources": 1.2088470000016969,
+        "form": 98.74079100000381,
+        "websocket": 15.359314000001177,
+        "persistence": 15.554876999995031
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 23,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "auto",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 234.06265000000712,
+      "phases": {
+        "navigation": 34.809409000001324,
+        "query": 70.99351700000261,
+        "resources": 1.138779999993858,
+        "form": 97.53067500000179,
+        "websocket": 15.573151999997208,
+        "persistence": 14.00443400000222
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 21,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "race",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 473.9842640000061,
+      "phases": {
+        "navigation": 273.4300549999971,
+        "query": 70.83346199999505,
+        "resources": 1.3285329999998794,
+        "form": 97.45992899999692,
+        "websocket": 17.29762800000026,
+        "persistence": 13.61990700000024
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 2
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "direct",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-timeout-direct-2",
+      "failedPhase": "navigation",
+      "elapsedMs": 2046.3995159999977,
+      "phases": {
+        "navigation": 2046.3887069999982
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "auto",
+      "repetition": 2,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 2973.3718489999956,
+      "phases": {
+        "navigation": 2023.3525430000009,
+        "query": 825.5784750000021,
+        "resources": 1.6161809999975958,
+        "form": 89.93731900000421,
+        "websocket": 15.886914000002434,
+        "persistence": 16.98522399999638
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "direct",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 219.0104749999955,
+      "phases": {
+        "navigation": 24.64736499999708,
+        "query": 75.98355399999855,
+        "resources": 1.3663830000004964,
+        "form": 97.23715600000287,
+        "websocket": 5.449012999997649,
+        "persistence": 14.313018000000739
+      },
+      "attempts": {
+        "direct": 19,
+        "proxy": 0
+      },
+      "originConnections": 19,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "auto",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 212.5368180000005,
+      "phases": {
+        "navigation": 13.365393999993103,
+        "query": 79.42550599999959,
+        "resources": 1.220075999997789,
+        "form": 96.33061100000486,
+        "websocket": 4.52852300000086,
+        "persistence": 17.653479000000516
+      },
+      "attempts": {
+        "direct": 18,
+        "proxy": 1
+      },
+      "originConnections": 19,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "race",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 203.28809600000386,
+      "phases": {
+        "navigation": 13.737740000004123,
+        "query": 71.05180899999687,
+        "resources": 1.2283239999960642,
+        "form": 98.64475099999981,
+        "websocket": 4.733986999999615,
+        "persistence": 13.878652999999758
+      },
+      "attempts": {
+        "direct": 16,
+        "proxy": 1
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "native",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 201.91781199999969,
+      "phases": {
+        "navigation": 13.870359000000462,
+        "query": 69.96166099999391,
+        "resources": 1.2053849999938393,
+        "form": 97.53897300000244,
+        "websocket": 3.7620650000026217,
+        "persistence": 15.56623500000569
+      },
+      "attempts": null,
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "direct",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1856.6357979999957,
+      "phases": {
+        "navigation": 462.5579749999961,
+        "query": 57.870632999998634,
+        "resources": 780.2782599999991,
+        "form": 86.53775499999756,
+        "websocket": 455.21347900000546,
+        "persistence": 14.163210999999137
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 4
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "auto",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1901.412983000002,
+      "phases": {
+        "navigation": 466.71525400000246,
+        "query": 73.82466800000111,
+        "resources": 781.7005810000046,
+        "form": 100.18190999999933,
+        "websocket": 461.46645400000125,
+        "persistence": 17.509402999996382
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 9,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 4
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "race",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 473.2329279999976,
+      "phases": {
+        "navigation": 278.00849000000017,
+        "query": 65.8289569999979,
+        "resources": 1.483314999997674,
+        "form": 97.67604199999914,
+        "websocket": 15.605701000000408,
+        "persistence": 14.617816999998468
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 18,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "direct",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 219.21278800000437,
+      "phases": {
+        "navigation": 22.04980699999578,
+        "query": 67.69433800000115,
+        "resources": 1.3589949999950477,
+        "form": 97.46863600000506,
+        "websocket": 15.398896999999124,
+        "persistence": 15.229826000002504
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "auto",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 221.13089700000273,
+      "phases": {
+        "navigation": 21.545462000001862,
+        "query": 69.56633499999589,
+        "resources": 1.4289730000018608,
+        "form": 97.43853699999454,
+        "websocket": 14.71272200000385,
+        "persistence": 16.42625599999883
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "race",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 225.23820700000215,
+      "phases": {
+        "navigation": 24.816823000001023,
+        "query": 70.26420099999814,
+        "resources": 1.275219000002835,
+        "form": 97.9268860000011,
+        "websocket": 15.579630999993242,
+        "persistence": 15.351257000002079
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 23,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "direct",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-refused-direct-3",
+      "failedPhase": "navigation",
+      "elapsedMs": 60.06199500000366,
+      "phases": {
+        "navigation": 60.052081000001635
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "auto",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 237.30648400000064,
+      "phases": {
+        "navigation": 34.342657000001054,
+        "query": 72.18944699999702,
+        "resources": 1.6496850000039558,
+        "form": 99.08777199999895,
+        "websocket": 16.13201800000388,
+        "persistence": 13.891268999999738
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "race",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 233.328010000012,
+      "phases": {
+        "navigation": 34.587650000001304,
+        "query": 67.43341800000053,
+        "resources": 1.5550749999965774,
+        "form": 97.50427599999239,
+        "websocket": 18.135680000006687,
+        "persistence": 14.097882000001846
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 16,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "direct",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 220.81538400000136,
+      "phases": {
+        "navigation": 23.110625000001164,
+        "query": 68.17792499999632,
+        "resources": 1.2783679999993183,
+        "form": 98.65472500000033,
+        "websocket": 15.985533999992185,
+        "persistence": 13.59437700000126
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "auto",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 230.0236329999898,
+      "phases": {
+        "navigation": 33.397340999988955,
+        "query": 62.584047000011196,
+        "resources": 1.5874920000060229,
+        "form": 99.54387599999609,
+        "websocket": 16.129660999999032,
+        "persistence": 16.76741299999412
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "race",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 228.6771000000008,
+      "phases": {
+        "navigation": 31.3970810000028,
+        "query": 66.60322000000451,
+        "resources": 1.5188340000022436,
+        "form": 97.83379599999171,
+        "websocket": 15.616886000003433,
+        "persistence": 15.693694000001415
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "direct",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-timeout-direct-3",
+      "failedPhase": "navigation",
+      "elapsedMs": 2040.0340010000073,
+      "phases": {
+        "navigation": 2040.0236869999935
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "auto",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 2234.4284400000033,
+      "phases": {
+        "navigation": 2029.798026000004,
+        "query": 72.47310899999866,
+        "resources": 1.350856000004569,
+        "form": 100.23747199999343,
+        "websocket": 15.971862000005785,
+        "persistence": 14.583699999988312
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 22,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "race",
+      "repetition": 3,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 470.603780999998,
+      "phases": {
+        "navigation": 276.8007409999991,
+        "query": 60.49584699999832,
+        "resources": 1.169672999996692,
+        "form": 100.62394300001324,
+        "websocket": 15.974165999999968,
+        "persistence": 15.527008999997634
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 2
+    },
+    {
+      "scenario": "normal",
+      "mode": "auto",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 204.16195900000457,
+      "phases": {
+        "navigation": 14.955568999997922,
+        "query": 71.60876299999654,
+        "resources": 1.4182419999997364,
+        "form": 96.46324800000002,
+        "websocket": 5.4533359999913955,
+        "persistence": 14.246897000004537
+      },
+      "attempts": {
+        "direct": 17,
+        "proxy": 1
+      },
+      "originConnections": 18,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "race",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 207.8636220000044,
+      "phases": {
+        "navigation": 15.131675000011455,
+        "query": 74.58516600000439,
+        "resources": 1.1800940000102855,
+        "form": 96.96877000000677,
+        "websocket": 5.734744999994291,
+        "persistence": 14.249637999993865
+      },
+      "attempts": {
+        "direct": 18,
+        "proxy": 1
+      },
+      "originConnections": 19,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "direct",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 220.91694499998994,
+      "phases": {
+        "navigation": 20.453602000008686,
+        "query": 79.7789230000053,
+        "resources": 1.2426930000074208,
+        "form": 100.18407599999045,
+        "websocket": 4.961806000006618,
+        "persistence": 14.269980999990366
+      },
+      "attempts": {
+        "direct": 17,
+        "proxy": 0
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "normal",
+      "mode": "native",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 193.2726079999993,
+      "phases": {
+        "navigation": 12.935223000007682,
+        "query": 65.14235900000494,
+        "resources": 1.1500490000034915,
+        "form": 98.22192300000461,
+        "websocket": 3.402323999995133,
+        "persistence": 12.40710900000704
+      },
+      "attempts": null,
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "auto",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1867.4151500000007,
+      "phases": {
+        "navigation": 465.9304120000015,
+        "query": 61.38580699999875,
+        "resources": 781.1848150000005,
+        "form": 83.96335499999986,
+        "websocket": 459.1626709999982,
+        "persistence": 15.773468999992474
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 9,
+      "posts": 1,
+      "resources": 20,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 4
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "race",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 479.41518799999903,
+      "phases": {
+        "navigation": 282.8124850000022,
+        "query": 65.945928000001,
+        "resources": 1.28420300000289,
+        "form": 98.09651000000304,
+        "websocket": 16.45886500000779,
+        "persistence": 14.801422999997158
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 18,
+      "posts": 1,
+      "resources": 23,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-slow",
+      "mode": "direct",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 1871.9194330000028,
+      "phases": {
+        "navigation": 464.4616359999927,
+        "query": 68.53785400000925,
+        "resources": 779.0439559999941,
+        "form": 88.85082599999441,
+        "websocket": 456.4547129999992,
+        "persistence": 14.555140000011306
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 7,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 4
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "auto",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 219.27307600001222,
+      "phases": {
+        "navigation": 23.994917000003625,
+        "query": 68.45200499999919,
+        "resources": 1.1426440000068396,
+        "form": 96.42658800000208,
+        "websocket": 15.213068999990355,
+        "persistence": 14.03008100000443
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "race",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 225.11214100000507,
+      "phases": {
+        "navigation": 21.987994000010076,
+        "query": 71.67968800000381,
+        "resources": 1.2031290000013541,
+        "form": 98.45665799999551,
+        "websocket": 16.03084000000672,
+        "persistence": 15.740127999990364
+      },
+      "attempts": {
+        "direct": 12,
+        "proxy": 1
+      },
+      "originConnections": 12,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 1,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "proxy-slow",
+      "mode": "direct",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 230.02432800001407,
+      "phases": {
+        "navigation": 26.808938999995007,
+        "query": 74.67150200001197,
+        "resources": 1.3214799999987008,
+        "form": 97.49848300000303,
+        "websocket": 15.406977999999071,
+        "persistence": 14.302919999987353
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 23,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "auto",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 250.60200800000166,
+      "phases": {
+        "navigation": 38.76640000000771,
+        "query": 80.59171799999604,
+        "resources": 1.2530990000086604,
+        "form": 97.85348099999828,
+        "websocket": 16.491150999994716,
+        "persistence": 15.63206300001184
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 22,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "race",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 245.70513600000413,
+      "phases": {
+        "navigation": 35.75001199998951,
+        "query": 79.49062099998991,
+        "resources": 1.2770149999996647,
+        "form": 97.54932700000063,
+        "websocket": 16.488683999996283,
+        "persistence": 15.135334000005969
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-refused",
+      "mode": "direct",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-refused-direct-4",
+      "failedPhase": "navigation",
+      "elapsedMs": 60.311218000002555,
+      "phases": {
+        "navigation": 60.301355999996304
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "auto",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 240.6976020000002,
+      "phases": {
+        "navigation": 32.80578300000343,
+        "query": 77.66039900000033,
+        "resources": 1.2783420000050683,
+        "form": 97.52440399999614,
+        "websocket": 15.54810099999304,
+        "persistence": 15.86587999999756
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 23,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "race",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 241.25707199999306,
+      "phases": {
+        "navigation": 33.455913999991026,
+        "query": 79.9710849999974,
+        "resources": 1.5292460000055144,
+        "form": 95.48664800000552,
+        "websocket": 16.27189800000633,
+        "persistence": 14.52652400000079
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 1
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 21,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "proxy-refused-warm",
+      "mode": "direct",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 222.54191799998807,
+      "phases": {
+        "navigation": 23.311912000004668,
+        "query": 70.07782799999404,
+        "resources": 1.2441499999986263,
+        "form": 97.80713899999682,
+        "websocket": 15.11070999999356,
+        "persistence": 14.975954999987152
+      },
+      "attempts": {
+        "direct": 11,
+        "proxy": 0
+      },
+      "originConnections": 11,
+      "posts": 1,
+      "resources": 24,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "auto",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 2229.0448329999927,
+      "phases": {
+        "navigation": 2027.6915460000018,
+        "query": 71.48756200000935,
+        "resources": 1.312619000003906,
+        "form": 98.71954900000128,
+        "websocket": 16.488272999995388,
+        "persistence": 13.332074000005377
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 15
+      },
+      "originConnections": 15,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 1,
+      "probeAttempts": 2,
+      "cancelled": 1
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "race",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": true,
+      "error": null,
+      "failedPhase": null,
+      "elapsedMs": 465.69150299999455,
+      "phases": {
+        "navigation": 274.42113699999754,
+        "query": 62.34406200000376,
+        "resources": 1.4668380000075558,
+        "form": 97.74876899999799,
+        "websocket": 16.24381600000197,
+        "persistence": 13.454381000003195
+      },
+      "attempts": {
+        "direct": 2,
+        "proxy": 17
+      },
+      "originConnections": 17,
+      "posts": 1,
+      "resources": 18,
+      "race": {
+        "enabled": true,
+        "delayMs": 250,
+        "started": 2,
+        "alternateWins": 1,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 2,
+      "cancelled": 2
+    },
+    {
+      "scenario": "direct-timeout",
+      "mode": "direct",
+      "repetition": 4,
+      "proxyScope": "http",
+      "ok": false,
+      "error": "page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at http://bench.test:45831/?id=direct-timeout-direct-4",
+      "failedPhase": "navigation",
+      "elapsedMs": 2031.216505999997,
+      "phases": {
+        "navigation": 2031.204740000001
+      },
+      "attempts": {
+        "direct": 1,
+        "proxy": 0
+      },
+      "originConnections": 0,
+      "posts": 0,
+      "resources": 0,
+      "race": {
+        "enabled": false,
+        "delayMs": 250,
+        "started": 0,
+        "alternateWins": 0,
+        "active": 0
+      },
+      "fallbacks": 0,
+      "probeAttempts": 0,
+      "cancelled": 0
+    }
+  ]
+}

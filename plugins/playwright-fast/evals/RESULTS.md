@@ -1,5 +1,8 @@
 # Playwright Fast Agent Evaluation Results
 
+The current speed-focused model/effort recommendation and 2026-09-11 measurements are in
+[SPEED.md](SPEED.md). The Terra/medium results below are historical 1.1.2 validation.
+
 ## 1.1.2 conditional-delegation validation
 
 Evaluation date: 2026-09-10. The final nine-run matrix covered three decision scenarios with Sol,

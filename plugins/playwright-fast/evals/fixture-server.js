@@ -79,6 +79,46 @@ function createFixtureServer({ port = 0 } = {}) {
       return;
     }
 
+    if (url.pathname === "/procurement") {
+      send(response, 200, "text/html; charset=utf-8", layout("设备采购", `
+        <p>预算为每台 4000 元。选择库存至少 3 台、内存至少 16 GB 的最便宜笔记本。</p>
+        <table aria-label="商品"><thead><tr><th>型号</th><th>内存 GB</th><th>单价</th><th>库存</th><th>操作</th></tr></thead><tbody id="products"></tbody></table>
+        <button id="next">下一页</button><p id="selection"></p>
+        <label>数量 <input type="number" id="quantity" value="1"></label>
+        <label>部门 <select id="department"><option>销售部</option><option>研发部</option></select></label>
+        <button id="review">核对订单</button><section id="review-panel" hidden></section>
+        <button id="confirm" hidden>确认采购</button><output id="receipt"></output>`, `
+        const pages = [
+          [{name:'Aster',ram:8,price:2800,stock:9},{name:'Birch',ram:16,price:3900,stock:6},{name:'Cedar',ram:32,price:3500,stock:2}],
+          [{name:'Dahlia',ram:16,price:3300,stock:5},{name:'Elm',ram:16,price:3200,stock:1},{name:'Fir',ram:32,price:4200,stock:9}]
+        ];
+        let page = 0, selected = null, draft = null;
+        function render() {
+          document.querySelector('#products').innerHTML = pages[page].map(p => '<tr><td>'+p.name+'</td><td>'+p.ram+'</td><td>'+p.price+'</td><td>'+p.stock+'</td><td><button data-name="'+p.name+'">选择</button></td></tr>').join('');
+          document.querySelectorAll('[data-name]').forEach(b => b.onclick = () => {
+            selected = pages[page].find(p => p.name === b.dataset.name);
+            document.querySelector('#selection').textContent = '已选择 '+selected.name;
+          });
+        }
+        document.querySelector('#next').onclick = () => { page = 1-page; render(); };
+        document.querySelector('#review').onclick = () => {
+          if (!selected) return;
+          draft = {model:selected.name,quantity:Number(document.querySelector('#quantity').value),department:document.querySelector('#department').value};
+          draft.total = draft.quantity * selected.price;
+          document.querySelector('#review-panel').hidden = false;
+          document.querySelector('#review-panel').textContent = JSON.stringify(draft);
+          document.querySelector('#confirm').hidden = false;
+        };
+        document.querySelector('#confirm').onclick = async () => {
+          await record('purchase', draft);
+          sessionStorage.setItem('receipt', JSON.stringify(draft));
+          document.querySelector('#receipt').textContent = '采购成功 '+JSON.stringify(draft);
+        };
+        document.querySelector('#receipt').textContent = sessionStorage.getItem('receipt') || '';
+        render();`));
+      return;
+    }
+
     if (url.pathname === "/form") {
       send(response, 200, "text/html; charset=utf-8", layout("订单查询", `
         <form id="search-form">

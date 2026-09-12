@@ -1,6 +1,6 @@
 {
   "name": "playwright-fast",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Persistent, contract-driven Playwright automation for low-latency Codex browser work.",
   "author": {
     "name": "Chunbo Jiang"
@@ -8,7 +8,7 @@
   "interface": {
     "displayName": "Playwright Fast",
     "shortDescription": "Run browser flows through a persistent Chromium runtime.",
-    "longDescription": "Exposes run, reset, and status tools backed by one reusable Playwright browser, with visible nested schemas, forgiving common action syntax, SPA-aware navigation, scoped locators, popup adoption, response capture, credential-aware CORS mocks, request-failure diagnostics, storage fixtures, and a 30-minute idle TTL.",
+    "longDescription": "Exposes run, reset, and status tools backed by a reusable Playwright browser. Includes compact contracts and evidence, persistent storage, local adaptive routing through inherited HTTP/HTTPS proxies, WS/WSS-aware proxy selection, and context-owned HTTP connection pools. Optional delayed connection competition stays disabled by default.",
     "developerName": "Chunbo Jiang",
     "category": "Developer",
     "capabilities": [

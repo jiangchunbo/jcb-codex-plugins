@@ -7,7 +7,7 @@ Public Codex marketplace and skill source repository for reusable development to
 - `.agents/plugins/marketplace.json`: Codex marketplace metadata.
 - `plugins/playwright-fast`: Codex plugin that exposes the persistent Playwright MCP server.
 - `plugins/playwright-fast/skills`: Skills bundled with the Playwright Fast plugin.
-- `plugins/playwright-fast/evals`: natural-language Agent evaluations for Sol, Terra, and Luna, with deterministic fixtures and optional local real-page checks.
+- `plugins/playwright-fast/evals`: model/effort and browser-routing evaluations, with deterministic fixtures and optional real-page checks.
 - `skills`: Standalone skill sources that can be linked into `~/.codex/skills`.
 
 ## Install
@@ -41,3 +41,16 @@ browser explicitly, set `PLAYWRIGHT_EXECUTABLE_PATH` to an executable Chrome or 
 the Playwright library version remains pinned.
 
 The repository marketplace is declared in `.agents/plugins/marketplace.json`; plugin sources are under `plugins/`, and standalone skill sources are under `skills/`.
+
+## Playwright Fast 1.2.0
+
+This release adds local adaptive routing using inherited HTTP/HTTPS proxy settings, WS/WSS-aware
+Chromium PAC routing, and context-owned HTTP connection pools. Without a supported inherited proxy,
+browser traffic stays direct and no relay or probes start. Delayed connection competition remains
+experimental and off by default. Neither system proxy nor model API routing is changed.
+
+The bundled skill also incorporates the retained GPT-5.5/Luna speed evaluations, preferring Luna
+low for eligible routine delegated browser work and medium for complex multi-stage flows.
+See the [release notes](plugins/playwright-fast/CHANGELOG.md),
+[routing guide](plugins/playwright-fast/skills/playwright/references/routing.md), and
+[verification results](plugins/playwright-fast/evals/ROUTING-FIXES.md).

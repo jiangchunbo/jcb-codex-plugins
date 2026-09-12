@@ -55,6 +55,9 @@ async function main() {
   const enforce = process.argv.includes("--enforce");
   if (!Number.isInteger(iterations) || iterations < 5 || iterations > 500) throw new Error("iterations must be between 5 and 500");
 
+  const evidence = process.argv.find(arg => arg.startsWith("--evidence="))?.split("=")[1] || "ultra";
+  if (!["ultra", "health", "visual"].includes(evidence)) throw new Error("Unsupported evidence");
+  const coldStarted = performance.now();
   const client = createClient();
   try {
     client.write({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
@@ -65,6 +68,7 @@ async function main() {
     });
     await client.waitFor((message) => message.id === 2);
 
+    const coldStartMs = performance.now() - coldStarted;
     const wallTimes = [];
     const runtimeTimes = [];
     for (let index = 0; index < iterations; index += 1) {
@@ -76,6 +80,7 @@ async function main() {
           name: "run",
           arguments: {
             id: `benchmark-${index}`,
+            evidence,
             steps: [{ op: "readText", target: { css: "main" }, as: "text" }],
             expect: [{ target: { css: "main" }, text: "ready" }],
           },
@@ -89,6 +94,8 @@ async function main() {
     }
     const summary = {
       iterations,
+      evidence,
+      coldStartMs: Math.round(coldStartMs * 10) / 10,
       wallP50Ms: Math.round(percentile(wallTimes, 0.5) * 10) / 10,
       wallP95Ms: Math.round(percentile(wallTimes, 0.95) * 10) / 10,
       runtimeP50Ms: percentile(runtimeTimes, 0.5),
@@ -103,7 +110,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+if (require.main === module) main().catch((error) => {
   process.stderr.write(`${error.stack || error.message}\n`);
   process.exitCode = 1;
 });
+
+module.exports = { createClient };
