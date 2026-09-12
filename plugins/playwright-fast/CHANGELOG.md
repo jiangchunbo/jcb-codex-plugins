@@ -25,5 +25,5 @@ task to load the updated skill and MCP process. Pinned Playwright/Chromium versi
 
 For a browser-networking rollback, set `PLAYWRIGHT_FAST_ROUTING=off` in the MCP process environment
 and restart it. Keep `PLAYWRIGHT_FAST_CONNECT_RACE=off` for ordinary trial use. The previous release
-source is commit `82696b640835482ba9d7175df66277509fbc635c` (1.1.2); the old installed cache is not
-manually removed. This release changes neither system proxy settings nor model API routing.
+source is commit `82696b640835482ba9d7175df66277509fbc635c` (1.1.2). The CLI may replace older
+cache directories during installation; use the preserved Git revision for a full-version rollback. This release changes neither system proxy settings nor model API routing.
