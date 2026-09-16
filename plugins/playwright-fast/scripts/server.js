@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const readline = require("node:readline");
+const { compactOutputs } = require("./output");
 const { Router } = require("./routing");
 const {
   DEFAULT_NAVIGATION_TIMEOUT_MS,
@@ -404,7 +405,7 @@ function fail(id, code, message) {
 async function callTool(name, args) {
   if (name === "run") {
     const { result, image } = await runtime.run(args || {});
-    const content = [{ type: "text", text: JSON.stringify(result) }];
+    const content = [{ type: "text", text: JSON.stringify(await compactOutputs(result)) }];
     if (image) content.push({ type: "image", data: image.toString("base64"), mimeType: "image/png" });
     const toolExecutionFailed = !result.ok && ["contract", "runtime"].includes(result.failureKind);
     return { content, isError: toolExecutionFailed };

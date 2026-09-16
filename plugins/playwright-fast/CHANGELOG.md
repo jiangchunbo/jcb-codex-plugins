@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 — 2026-09-16
+
+- Bound large MCP outputs with a structured preview and a private local JSON artifact containing
+  the full outputs; preserve small results and all failure/verification metadata.
+- Preflight evaluate syntax before browser actions and explain static budget failures with
+  actionable timeout guidance.
+- Shorten the main skill and load advanced guidance on demand; prefer scoped discovery,
+  bounded logs, condition waits, and text diagnostics when screenshots add no evidence.
+
+Validation: 76 regression tests passed, plus a real Chromium/MCP large-output round trip and
+subsequent successful read. Offline replay of 28 historical results reduced returned JSON
+characters by 90.7%, with full artifact contents verified; this is not an end-to-end latency claim.
+
 ## 1.2.1 — 2026-09-16
 
 - Bound optional response body capture by its original deadline; detach listeners and ignore

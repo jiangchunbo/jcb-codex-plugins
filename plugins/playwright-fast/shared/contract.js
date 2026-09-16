@@ -1,3 +1,5 @@
+const { Script } = require("node:vm");
+
 const supportedEvidence = new Set(["ultra", "health", "visual", "diag"]);
 const supportedWaitUntil = new Set(["commit", "domcontentloaded", "load", "networkidle"]);
 const diagnosticRequestTypes = new Set(["document", "xhr", "fetch", "eventsource"]);
@@ -121,39 +123,50 @@ function expectationBudgetMs(expectation, defaultTimeoutMs) {
   return defaultTimeoutMs;
 }
 
-function estimateContractBudgetMs(contract) {
+function estimateContractBudget(contract) {
   const defaultTimeoutMs = contract.timeoutMs || DEFAULT_TIMEOUT_MS;
   const navigationTimeoutMs = contract.navigationTimeoutMs || DEFAULT_NAVIGATION_TIMEOUT_MS;
-  let serialBudgetMs = contract.url ? navigationTimeoutMs : 0;
+  const serial = [];
+  let locator = { path: "timeoutMs", ms: 0 };
+  const addLocator = (path, ms) => { if (ms > locator.ms) locator = { path, ms }; };
+  if (contract.url) serial.push({ path: "navigationTimeoutMs", ms: navigationTimeoutMs });
   let currentDocumentUrl = contract.url;
-  let largestLocatorBudgetMs = contract.ready ? expectationBudgetMs(contract.ready, defaultTimeoutMs) : 0;
-  for (const step of contract.steps || []) {
+  if (contract.ready) addLocator("timeoutMs", expectationBudgetMs(contract.ready, defaultTimeoutMs));
+  for (const [index, step] of (contract.steps || []).entries()) {
+    const prefix = `steps[${index}]`;
+    const timeoutPath = step.timeoutMs === undefined ? "timeoutMs" : `${prefix}.timeoutMs`;
+    const navigationPath = step.timeoutMs === undefined ? "navigationTimeoutMs" : `${prefix}.timeoutMs`;
     if (step.op === "wait" && step.ms !== undefined) {
-      serialBudgetMs += step.ms;
+      serial.push({ path: `${prefix}.ms`, ms: step.ms });
     } else if (step.op === "waitForTimeout") {
-      serialBudgetMs += step.ms ?? step.timeoutMs ?? defaultTimeoutMs;
+      serial.push({ path: step.ms === undefined ? timeoutPath : `${prefix}.ms`, ms: step.ms ?? step.timeoutMs ?? defaultTimeoutMs });
     } else if (step.op === "goto") {
       const sameDocument = currentDocumentUrl && String(currentDocumentUrl).split("#", 1)[0] === String(step.url).split("#", 1)[0];
-      if (!sameDocument) serialBudgetMs += step.timeoutMs || navigationTimeoutMs;
+      if (!sameDocument) serial.push({ path: navigationPath, ms: step.timeoutMs || navigationTimeoutMs });
       currentDocumentUrl = step.url;
     } else if (step.op === "reload" || step.op === "setContent") {
-      serialBudgetMs += step.timeoutMs || navigationTimeoutMs;
+      serial.push({ path: navigationPath, ms: step.timeoutMs || navigationTimeoutMs });
       if (step.op === "setContent") currentDocumentUrl = undefined;
     } else if (step.op === "click" && step.popup === "switch") {
-      serialBudgetMs += step.timeoutMs ? 3 * step.timeoutMs : 2 * defaultTimeoutMs + navigationTimeoutMs;
+      if (step.timeoutMs) serial.push({ path: timeoutPath, ms: 3 * step.timeoutMs });
+      else serial.push({ path: "timeoutMs", ms: 2 * defaultTimeoutMs }, { path: "navigationTimeoutMs", ms: navigationTimeoutMs });
     } else {
-      largestLocatorBudgetMs = Math.max(largestLocatorBudgetMs, step.timeoutMs || defaultTimeoutMs);
+      addLocator(timeoutPath, step.timeoutMs || defaultTimeoutMs);
     }
   }
-  for (const expectation of contract.expect || []) {
-    largestLocatorBudgetMs = Math.max(largestLocatorBudgetMs, expectationBudgetMs(expectation, defaultTimeoutMs));
-  }
-  const responseBudgetMs = Math.max(0, ...(contract.captureResponses || [])
-    .filter((capture) => capture.required !== false)
-    .map((capture) => capture.timeoutMs || defaultTimeoutMs));
-  // A locator failure stops the flow. Adding every locator timeout rejects compact flows even
-  // though only one failure ceiling can be consumed; navigation and explicit sleeps stay serial.
-  return Math.max(serialBudgetMs + largestLocatorBudgetMs, responseBudgetMs);
+  for (const expectation of contract.expect || []) addLocator("timeoutMs", expectationBudgetMs(expectation, defaultTimeoutMs));
+  const captures = (contract.captureResponses || []).flatMap((capture, index) => capture.required === false ? [] : [{
+    path: capture.timeoutMs === undefined ? "timeoutMs" : `captureResponses[${index}].timeoutMs`,
+    ms: capture.timeoutMs || defaultTimeoutMs,
+  }]);
+  const browserContributors = [...serial, ...(locator.ms ? [locator] : [])];
+  const browserBudgetMs = browserContributors.reduce((sum, item) => sum + item.ms, 0);
+  const capture = captures.reduce((largest, item) => item.ms > largest.ms ? item : largest, { ms: 0 });
+  // A locator failure stops the flow. Only its largest ceiling is counted;
+  // navigation and explicit sleeps stay serial, response deadlines overlap.
+  return capture.ms > browserBudgetMs
+    ? { ms: capture.ms, contributors: [capture] }
+    : { ms: browserBudgetMs, contributors: browserContributors };
 }
 
 function suggestedNextAction(failureKind) {
@@ -222,14 +235,38 @@ function schemaIssues(value, schema, path = "", issues = []) {
 
 function validateContract(contract) {
   const issues = schemaIssues(contract, contractSchema);
+  const canEstimateBudget = issues.every(issue => / must not exceed /.test(issue.message));
+  // Compile only: never execute user code or resolve browser globals on the host.
+  // The page runner uses direct eval in strict class-method code.
+  if (Array.isArray(contract?.steps)) contract.steps.forEach((step, index) => {
+    if (step?.op !== "evaluate" || typeof step.expression !== "string" || !step.expression) return;
+    try { new Script(`"use strict";\n${step.expression}`); }
+    catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      const path = `steps[${index}].expression`;
+      issues.push({ path, message: `${path} has invalid JavaScript syntax: ${error.message}. Fix the expression before rerunning; no browser actions were performed.` });
+    }
+  });
   let semanticError;
   try { validateContractSemantics(contract); } catch (error) { semanticError = error; }
   if (semanticError instanceof ContractError) {
-    const matching = issues.findIndex((issue) => semanticError.message.startsWith(`${issue.path} `) || semanticError.message === issue.message);
-    if (matching >= 0) issues[matching].message = semanticError.message;
-    else issues.unshift({ path: "contract", message: semanticError.message });
+    if (semanticError.issues) issues.push(...semanticError.issues);
+    else {
+      const matching = issues.findIndex((issue) => semanticError.message.startsWith(`${issue.path} `) || semanticError.message === issue.message);
+      if (matching >= 0) issues[matching].message = semanticError.message;
+      else issues.unshift({ path: "contract", message: semanticError.message });
+    }
   } else if (semanticError && !(semanticError instanceof ContractError) && issues.length === 0) {
     throw semanticError;
+  }
+  // A numeric maximum violation still has a usable shape: report the combined
+  // budget in the same rejection instead of forcing a second correction round.
+  if (canEstimateBudget) {
+    try { validateContractBudget(contract); }
+    catch (error) {
+      if (!(error instanceof ContractError)) throw error;
+      issues.push(...error.issues);
+    }
   }
   if (issues.length) throw new ContractError(issues.map((issue) => issue.message).join("; "), issues);
 }
@@ -378,8 +415,17 @@ function validateContractSemantics(contract) {
   if (contract.ready !== undefined) validateExpectation(contract.ready, "ready");
   assertContract(contract.expect === undefined || Array.isArray(contract.expect), "expect must be an array");
   (contract.expect || []).forEach((expectation, index) => validateExpectation(expectation, `expect[${index}]`));
-  const budgetMs = estimateContractBudgetMs(contract);
-  assertContract(budgetMs <= MAX_CONTRACT_BUDGET_MS, `Estimated contract budget ${budgetMs}ms exceeds ${MAX_CONTRACT_BUDGET_MS}ms; split the flow or lower explicit waits/timeouts`);
+}
+
+function validateContractBudget(contract) {
+  const budget = estimateContractBudget(contract);
+  if (budget.ms > MAX_CONTRACT_BUDGET_MS) {
+    const totals = new Map();
+    for (const { path, ms } of budget.contributors) totals.set(path, (totals.get(path) || 0) + ms);
+    const breakdown = [...totals].map(([path, ms]) => `${path} contributes ${ms}ms`).join(", ");
+    const message = `Estimated contract budget ${budget.ms}ms exceeds ${MAX_CONTRACT_BUDGET_MS}ms (${breakdown}). Reduce these contributions by at least ${budget.ms - MAX_CONTRACT_BUDGET_MS}ms or split the flow. timeoutMs is a per-operation default, not a whole-flow deadline; omit it when the 2000ms default is sufficient.`;
+    throw new ContractError(message, [{ path: "contract", message }]);
+  }
 }
 
 function globToRegExp(pattern) {
