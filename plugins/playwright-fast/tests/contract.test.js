@@ -826,7 +826,7 @@ test("MCP failure reports step progress and classifies a missing popup as page",
     const contractResult = JSON.parse(contractReply.result.content[0].text);
     assert.equal(contractResult.failureKind, "contract");
     assert.equal(contractResult.runtime, "idle");
-    assert.match(contractResult.nextAction, /Correct the reported contract field/);
+    assert(contractResult.contractErrors.some(issue => issue.path === "steps[0].op"));
     client.write({
       jsonrpc: "2.0",
       id: 3,

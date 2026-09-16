@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.0+codex.20260916061204 — 2026-09-16
+
+- Bound optional response body capture by its original deadline; detach listeners and ignore
+  late completions without interrupting or replaying application requests.
+- Reject invalid diagnostic/visual contracts without taking a screenshot.
+- Validate the published schema's nested fields, reject unsupported fields, and return grouped
+  `contractErrors` so independent parameter mistakes can be repaired in one call.
+- Add response-capture examples and clarify timeout budgets, partial captures, and entry readiness.
+
+Validation: 65 local regression tests passed, including a real Chromium/MCP fixture with an
+unfinished HTTP response body and a subsequent successful status/run. Independent skill-only
+first-contract construction passed validation (one case, not a statistical success-rate estimate).
+
 ## 1.2.0 — 2026-09-12
 
 - Automatically compare direct connections with inherited HTTP/HTTPS proxies using bounded local

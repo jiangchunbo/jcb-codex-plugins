@@ -321,7 +321,7 @@ class PersistentRuntime {
       };
     } catch (error) {
       const failureKind = classifyFailure(error, phase);
-      if ((evidence === "visual" || evidence === "diag") && !image && this.page && !this.page.isClosed()) {
+      if (failureKind !== "contract" && (evidence === "visual" || evidence === "diag") && !image && this.page && !this.page.isClosed()) {
         try {
           image = await this.page.screenshot({
             ...(contract?.screenshot?.path ? { path: contract.screenshot.path } : {}),
@@ -344,6 +344,7 @@ class PersistentRuntime {
           url: this.page?.url() || null,
           viewport: this.page?.viewportSize() || null,
           error: compactError(error),
+          ...(error.issues ? { contractErrors: error.issues } : {}),
           nextAction: suggestedNextAction(failureKind),
           ...(stepResults.length > 0 ? { stepResults } : {}),
           ...(Object.keys(outputs).length > 0 ? { outputs } : {}),

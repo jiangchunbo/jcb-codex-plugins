@@ -63,6 +63,33 @@ one call:
 }
 ```
 
+For a real login response, register the capture in the same call as the single submit action:
+
+```json
+{
+  "url": "http://127.0.0.1:3000/#/login",
+  "steps": [
+    { "op": "fill", "target": { "label": "Username" }, "value": "demo" },
+    { "op": "fill", "target": { "label": "Password" }, "value": "fixture-password" },
+    { "op": "click", "target": { "role": "button", "name": "Log in" } }
+  ],
+  "captureResponses": [{
+    "url": "**/api/login", "method": "POST", "as": "login",
+    "body": "json", "required": true, "timeoutMs": 10000
+  }],
+  "evidence": "health"
+}
+```
+
+Each capture requires `url` and `as`; its output contains `url`, `method`, `status`, and `body`.
+There is no JSON field projection: select the few needed fields when reporting the captured body.
+`maxBodyBytes` rejects oversized bodies; it does not truncate or select fields. Capture deadlines
+start when listeners are installed, before navigation and actions, using the capture's `timeoutMs`
+or the default locator timeout. Budget for the preceding actions as well as the response.
+`required:false` does not wait for a future matching response; it returns an already observed
+capture or `null` (an empty array when `count` is greater than one), while still awaiting body reads
+already in flight up to the capture deadline. At expiry it returns only completed captures. Do not submit again to repair a missing capture after login was triggered.
+
 Use the MCP tools as follows:
 
 - `run`: execute one contract while reusing browser, context, page, cookies, and local storage.
@@ -113,10 +140,11 @@ When controls are known, batch actions and final reads. On an unfamiliar page, t
 read to discover controls, then batch the dependent actions. Do not guess hidden option values:
 for a native select, use `value: {"label":"visible option label"}` or first inspect actual options.
 Scope success checks to the result/receipt container so hidden options with the same text do not
-win the match. A top-level `ready` must remain valid before every step; put waits for later states
+win the match. Top-level `ready` is checked once after entry navigation; put waits for later states
 after the action that creates them. Keep `domcontentloaded` and locator-based readiness; use neither `networkidle` nor fixed sleeps
 unless a specific requirement justifies them. Do not increase timeouts to compensate for an
-unverified locator or guessed value.
+unverified locator or guessed value. A strict multiple-match error requires a more precise locator,
+not a longer timeout.
 
 Read the smallest relevant container, bound text with `maxChars`, and return only fields needed
 for the next decision. Whole-body `readText`/`readAllText` uses textContent and can include scripts
@@ -149,8 +177,8 @@ Check these contract shapes before running:
 
 - Nest readiness locators under `target`, for example
   `"ready":{"target":{"text":"Ready"},"state":"visible"}`.
-- Top-level `ready` runs after top-level navigation and before every step. When `setContent` or a
-  step-level `goto` creates the target, add a later `wait` step instead.
+- Top-level `ready` is checked once after entry navigation, not before every step. When `setContent`
+  or a step-level `goto` creates the target, add a later `wait` step instead.
 - Same-document navigation, including Hash Router changes, automatically yields for two animation
   frames. Still use a later target wait when the application performs additional asynchronous work.
 - Treat `routes` and `blockResourceTypes` as call-scoped. Repeat required rules in every contract
@@ -174,8 +202,10 @@ Check these contract shapes before running:
   match exists; ambiguous matches still fail normally.
 
 New-document flows default to a `1440x900` viewport. Continuation contracts without a top-level
-`url`, `goto`, or `setContent` preserve the current viewport, including targeted diagnostics. The
-runtime otherwise uses a 2-second locator timeout, 5-second navigation and screenshot timeout,
+`url`, `goto`, or `setContent` preserve the current viewport, including targeted diagnostics.
+Top-level `timeoutMs` sets the default locator timeout, not a whole-flow deadline; it defaults to
+2 seconds. Navigation defaults to 5 seconds, and explicit operation timeouts are capped at
+30 seconds. The runtime otherwise uses a 5-second screenshot timeout,
 `domcontentloaded`, reduced motion, blocked service workers, and a 30-minute idle TTL. Follow
 repository viewport rules when they differ. Read the router configuration before choosing a URL;
 Hash Router routes require `/#/...`.
@@ -201,7 +231,8 @@ that the real application integrated correctly.
 
 ## Escalate Once
 
-Fix `contract` failures and rerun the same minimal contract. For one valid-contract `locator`,
+Fix all returned `contractErrors` together and rerun the same minimal contract. Contract failures
+return before browser actions or screenshots; do not add a diagnostic call for invalid parameters. For one valid-contract `locator`,
 `assertion`, `navigation`, `network`, `page`, or `runtime` failure, preserve the browser and current page, then
 run one targeted `diag` contract. Omit top-level `url` when diagnosing the rendered page. Repeat
 route rules only when diagnosis navigates or reloads.

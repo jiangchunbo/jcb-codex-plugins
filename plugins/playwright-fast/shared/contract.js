@@ -15,9 +15,10 @@ const supportedSteps = new Set([
 const selectorKeys = ["role", "text", "label", "placeholder", "testId", "css"];
 
 class ContractError extends Error {
-  constructor(message) {
+  constructor(message, issues) {
     super(message);
     this.name = "ContractError";
+    if (issues) this.issues = issues;
   }
 }
 
@@ -156,7 +157,7 @@ function estimateContractBudgetMs(contract) {
 }
 
 function suggestedNextAction(failureKind) {
-  if (failureKind === "contract") return "Correct the reported contract field and rerun the same compact flow.";
+  if (failureKind === "contract") return "Correct all reported contract fields together and rerun the same compact flow.";
   return "Preserve the current page and run one targeted diag contract without repeating the failed expectation; omit top-level url unless diagnosis navigates.";
 }
 
@@ -172,7 +173,68 @@ function screenshotTimeoutMs(defaultTimeoutMs, navigationTimeoutMs) {
   return Math.max(defaultTimeoutMs || DEFAULT_TIMEOUT_MS, navigationTimeoutMs || DEFAULT_NAVIGATION_TIMEOUT_MS);
 }
 
+// Validate the keywords used by our published schema, including nested targets.
+// Semantic constraints (operation-specific fields, selector exclusivity, budgets)
+// remain in validateContractSemantics below.
+function schemaIssues(value, schema, path = "", issues = []) {
+  if (schema.$ref) schema = contractSchema.$defs[schema.$ref.split("/").pop()];
+  const label = path || "contract";
+  const add = (message) => issues.push({ path: label, message });
+  if (schema.oneOf) {
+    if (schema.oneOf.filter((branch) => schemaIssues(value, branch, path, []).length === 0).length !== 1) {
+      add(`${label} must match exactly one supported shape`);
+    }
+    return issues;
+  }
+  if (Object.prototype.hasOwnProperty.call(schema, "const") && value !== schema.const) add(`${label} must be ${JSON.stringify(schema.const)}`);
+  if (schema.type) {
+    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+    const matches = types.some((type) => type === "array" ? Array.isArray(value)
+      : type === "object" ? value !== null && typeof value === "object" && !Array.isArray(value)
+      : type === "integer" ? Number.isInteger(value)
+      : type === "number" ? typeof value === "number" && Number.isFinite(value)
+      : typeof value === type);
+    if (!matches) { add(`${label} must be ${types.join(" or ")}`); return issues; }
+  }
+  if (schema.enum && !schema.enum.includes(value)) add(`${label} must be one of ${schema.enum.join(", ")}`);
+  if (typeof value === "number") {
+    if (schema.minimum !== undefined && value < schema.minimum) add(`${label} must be at least ${schema.minimum}`);
+    if (schema.maximum !== undefined && value > schema.maximum) add(`${label} must not exceed ${schema.maximum}`);
+  }
+  if (typeof value === "string" && schema.minLength !== undefined && value.length < schema.minLength) add(`${label} must be a non-empty string`);
+  if (Array.isArray(value)) {
+    if (schema.minItems !== undefined && value.length < schema.minItems) add(`${label} must contain at least ${schema.minItems} item(s)`);
+    if (schema.items) value.forEach((item, index) => schemaIssues(item, schema.items, `${path}[${index}]`, issues));
+  } else if (value && typeof value === "object") {
+    const childPath = (key) => path ? `${path}.${key}` : key;
+    for (const key of schema.required || []) {
+      if (value[key] === undefined) issues.push({ path: childPath(key), message: `${childPath(key)} is required` });
+    }
+    for (const [key, item] of Object.entries(value)) {
+      const childSchema = Object.hasOwn(schema.properties || {}, key) ? schema.properties[key] : undefined;
+      if (childSchema) schemaIssues(item, childSchema, childPath(key), issues);
+      else if (schema.additionalProperties === false) issues.push({ path: childPath(key), message: `${childPath(key)} is not supported` });
+      else if (schema.additionalProperties && typeof schema.additionalProperties === "object") schemaIssues(item, schema.additionalProperties, childPath(key), issues);
+    }
+  }
+  return issues;
+}
+
 function validateContract(contract) {
+  const issues = schemaIssues(contract, contractSchema);
+  let semanticError;
+  try { validateContractSemantics(contract); } catch (error) { semanticError = error; }
+  if (semanticError instanceof ContractError) {
+    const matching = issues.findIndex((issue) => semanticError.message.startsWith(`${issue.path} `) || semanticError.message === issue.message);
+    if (matching >= 0) issues[matching].message = semanticError.message;
+    else issues.unshift({ path: "contract", message: semanticError.message });
+  } else if (semanticError && !(semanticError instanceof ContractError) && issues.length === 0) {
+    throw semanticError;
+  }
+  if (issues.length) throw new ContractError(issues.map((issue) => issue.message).join("; "), issues);
+}
+
+function validateContractSemantics(contract) {
   assertContract(contract && typeof contract === "object" && !Array.isArray(contract), "Contract must be an object");
   assertContract(supportedEvidence.has(contract.evidence || "ultra"), "Unsupported evidence tier");
   if (contract.url !== undefined) assertContract(typeof contract.url === "string" && contract.url.length > 0, "url must be a non-empty string");
@@ -927,12 +989,12 @@ class FlowRuntime {
         results: [],
         inFlight: 0,
         error: null,
+        closed: false,
         changed: new Promise((resolve) => { notify = resolve; }),
         notify,
       };
     });
     if (states.length === 0) return undefined;
-    const pending = new Set();
     const signal = (state) => {
       state.notify();
       state.changed = new Promise((resolve) => { state.notify = resolve; });
@@ -963,58 +1025,75 @@ class FlowRuntime {
       const method = request.method().toUpperCase();
       for (const state of states) {
         const matches =
+          !state.closed && Date.now() < state.deadline &&
           state.rule.matcher.test(response.url()) &&
           (state.rule.method === undefined || state.rule.method === method) &&
           state.results.length + state.inFlight < state.rule.count &&
           hasTextualBody(response);
         if (!matches) continue;
         state.inFlight += 1;
-        const capture = captureBody(response, state)
+        captureBody(response, state)
           .then((body) => {
-            state.results.push({ url: response.url(), method, status: response.status(), body });
+            if (!state.closed && Date.now() < state.deadline) {
+              state.results.push({ url: response.url(), method, status: response.status(), body });
+            }
           })
-          .catch((error) => { state.error = error; })
+          .catch((error) => { if (!state.closed && Date.now() < state.deadline) state.error = error; })
           .finally(() => {
             state.inFlight -= 1;
             signal(state);
-            pending.delete(capture);
           });
-        pending.add(capture);
       }
     };
     this.context.on("response", handler);
 
+    const dispose = () => {
+      this.context.off("response", handler);
+      for (const state of states) {
+        state.closed = true;
+        signal(state);
+      }
+    };
     return {
       wait: async () => {
         const waitForState = async (state) => {
-          while (state.rule.required && state.results.length < state.rule.count && !state.error) {
+          // Optional captures only wait for bodies already in progress, never for
+          // missing responses. All rules share their original run-relative clock.
+          while (!state.closed && !state.error &&
+            (state.rule.required ? state.results.length < state.rule.count : state.inFlight > 0)) {
             const remaining = state.deadline - Date.now();
             if (remaining <= 0) {
-              throw new Error(`Timed out after ${state.rule.timeoutMs || defaultTimeoutMs}ms waiting for ${state.rule.count} response(s) as ${state.rule.as} (received ${state.results.length})`);
+              if (state.rule.required) {
+                throw new Error(`Timed out after ${state.rule.timeoutMs || defaultTimeoutMs}ms waiting for ${state.rule.count} response(s) as ${state.rule.as} (received ${state.results.length})`);
+              }
+              break;
             }
-            await new Promise((resolve, reject) => {
-              const timer = setTimeout(
-                () => reject(new Error(`Timed out after ${state.rule.timeoutMs || defaultTimeoutMs}ms waiting for ${state.rule.count} response(s) as ${state.rule.as} (received ${state.results.length})`)),
-                remaining,
-              );
+            await new Promise((resolve) => {
+              const timer = setTimeout(resolve, remaining);
               state.changed.then(() => {
                 clearTimeout(timer);
                 resolve();
               });
             });
           }
+          state.closed = true;
           if (state.error) throw state.error;
         };
-        await Promise.all(states.map(waitForState));
-        await Promise.all([...pending]);
-        for (const state of states) {
-          if (state.error) throw state.error;
-          outputs[state.rule.as] = state.rule.count === 1 ? state.results[0] ?? null : state.results;
+        try {
+          await Promise.all(states.map(waitForState));
+          for (const state of states) {
+            outputs[state.rule.as] = state.rule.count === 1 ? state.results[0] ?? null : [...state.results];
+          }
+        } finally {
+          // Late body completions/rejections remain handled but cannot change
+          // the results returned by this call or retain the response listener.
+          dispose();
         }
       },
-      dispose: () => this.context.off("response", handler),
+      dispose,
     };
   }
+
 }
 
 const frameSchema = {

@@ -1,6 +1,6 @@
 {
   "name": "playwright-fast",
-  "version": "1.2.0",
+  "version": "1.2.0+codex.20260916061204",
   "description": "Persistent, contract-driven Playwright automation for low-latency Codex browser work.",
   "author": {
     "name": "Chunbo Jiang"
