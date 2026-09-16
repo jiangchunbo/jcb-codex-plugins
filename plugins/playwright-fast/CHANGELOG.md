@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.0+codex.20260916061204 — 2026-09-16
+## 1.2.1 — 2026-09-16
 
 - Bound optional response body capture by its original deadline; detach listeners and ignore
   late completions without interrupting or replaying application requests.
