@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const readline = require("node:readline");
 const { compactOutputs } = require("./output");
+const { observe } = require("../shared/observe");
 const { Router } = require("./routing");
 const {
   DEFAULT_NAVIGATION_TIMEOUT_MS,
@@ -322,6 +323,10 @@ class PersistentRuntime {
       };
     } catch (error) {
       const failureKind = classifyFailure(error, phase);
+      let failureObservation;
+      if (failureKind === "locator" && this.page && !this.page.isClosed()) {
+        try { failureObservation = await observe(this.page.locator("body"), { maxChars: 2500, timeoutMs: 500 }); } catch {}
+      }
       if (failureKind !== "contract" && (evidence === "visual" || evidence === "diag") && !image && this.page && !this.page.isClosed()) {
         try {
           image = await this.page.screenshot({
@@ -341,6 +346,7 @@ class PersistentRuntime {
           ...(this.routing?.config.warnings.length ? { routingWarnings: this.routing.config.warnings } : {}),
           phase,
           failureKind,
+          ...(failureObservation ? { failureObservation } : {}),
           elapsedMs: Math.round(performance.now() - started),
           url: this.page?.url() || null,
           viewport: this.page?.viewportSize() || null,

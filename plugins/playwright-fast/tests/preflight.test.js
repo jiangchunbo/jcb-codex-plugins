@@ -84,3 +84,19 @@ test("budget attributes popup multipliers and navigation overrides without chang
     { op: "evaluate", expression: "1", timeoutMs: 20000 },
   ] });
 });
+
+
+test("editor patch and observation parameter mistakes fail before browser work", async () => {
+  const Runtime = loadRuntime();
+  const runtime = new Runtime();
+  runtime.ensure = () => { throw Error("must not start browser"); };
+  for (const step of [
+    { op: "editorPatch", target: { css: "textarea" }, oldText: "", newText: "x" },
+    { op: "editorPatch", target: { css: "textarea" }, oldText: "x", newText: "y", expectedHash: "bad" },
+    { op: "editorRead", target: { css: "textarea" }, maxChars: 100001 },
+    { op: "observe", maxChars: 30001 },
+  ]) {
+    const { result } = await runtime.run({ steps: [{ op: "click", target: { text: "Save" } }, step] });
+    assert.equal(result.failureKind, "contract");
+  }
+});

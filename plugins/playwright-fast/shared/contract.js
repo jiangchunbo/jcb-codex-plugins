@@ -1,4 +1,6 @@
 const { Script } = require("node:vm");
+const { observe } = require("./observe");
+const { editorOperation } = require("./editors");
 
 const supportedEvidence = new Set(["ultra", "health", "visual", "diag"]);
 const supportedWaitUntil = new Set(["commit", "domcontentloaded", "load", "networkidle"]);
@@ -12,7 +14,7 @@ const MAX_CONTRACT_BUDGET_MS = 50_000;
 const supportedSteps = new Set([
   "setContent", "goto", "reload", "click", "fill", "clear", "type", "press", "select", "setInputFiles", "check",
   "uncheck", "hover", "focus", "wait", "readText", "readAllText", "readAttribute",
-  "readValue", "readBoundingBox", "readComputedStyle", "evaluate", "waitForTimeout",
+  "observe", "editorRead", "editorPatch", "readValue", "readBoundingBox", "readComputedStyle", "evaluate", "waitForTimeout",
 ]);
 const selectorKeys = ["role", "text", "label", "placeholder", "testId", "css"];
 
@@ -171,7 +173,7 @@ function estimateContractBudget(contract) {
 
 function suggestedNextAction(failureKind) {
   if (failureKind === "contract") return "Correct all reported contract fields together and rerun the same compact flow.";
-  return "Preserve the current page and run one targeted diag contract without repeating the failed expectation; omit top-level url unless diagnosis navigates.";
+  return "Inspect failureObservation if present. Preserve the page and use one scoped observe/read without repeating the failed expectation, only if more evidence is needed; use diag for visual diagnostics. Do not replay completed mutations; omit top-level url during diagnosis.";
 }
 
 function resolveViewport(contract, currentViewport) {
@@ -368,6 +370,10 @@ function validateContractSemantics(contract) {
     if (step.as !== undefined) assertContract(typeof step.as === "string" && step.as.length > 0, `${label}.as must be a non-empty string`);
     if (step.delay !== undefined) assertContract(typeof step.delay === "number" && Number.isFinite(step.delay) && step.delay >= 0, `${label}.delay must be a non-negative number`);
     if (step.state !== undefined) assertContract(["attached", "detached", "visible", "hidden"].includes(step.state), `${label}.state is unsupported`);
+    for (const key of ["oldText", "newText", "expectedHash"]) {
+      if (step[key] !== undefined) assertContract(step.op === "editorPatch", `${label}.${key} is only supported for editorPatch`);
+    }
+    if (step.expectedHash !== undefined) assertContract(/^[a-f0-9]{64}$/.test(step.expectedHash), `${label}.expectedHash must be a SHA-256 hex digest`);
     if (step.op === "setContent") {
       assertContract(typeof step.html === "string", `${label}.html must be a string`);
       return;
@@ -376,7 +382,14 @@ function validateContractSemantics(contract) {
       assertContract(typeof step.url === "string" && step.url.length > 0, `${label}.url is required`);
       return;
     }
+    if (step.op === "editorRead" && step.maxChars !== undefined) assertContract(step.maxChars <= 100000, `${label}.maxChars must not exceed 100000 for editorRead`);
+    if (step.op === "observe" && step.maxChars !== undefined) assertContract(step.maxChars <= 30000, `${label}.maxChars must not exceed 30000 for observe`);
     if (step.op === "reload") return;
+    if (step.op === "observe" && step.target === undefined) return;
+    if (step.op === "editorPatch") {
+      assertContract(typeof step.oldText === "string" && step.oldText.length > 0, `${label}.oldText must be non-empty`);
+      assertContract(typeof step.newText === "string", `${label}.newText must be a string`);
+    }
     if (step.op === "evaluate") {
       assertContract(typeof step.expression === "string" && step.expression.length > 0, `${label}.expression is required`);
       if (step.frame !== undefined) validateFrame(step.frame, `${label}.frame`);
@@ -408,7 +421,7 @@ function validateContractSemantics(contract) {
         `${label}.${fileFields[0]} must be a non-empty string array`,
       );
     }
-    if (step.maxChars !== undefined) assertContract(["readText", "readAllText"].includes(step.op), `${label}.maxChars is only supported for readText and readAllText`);
+    if (step.maxChars !== undefined) assertContract(["readText", "readAllText", "observe", "editorRead"].includes(step.op), `${label}.maxChars is only supported for text reads, observe and editorRead`);
     if (step.op === "readAttribute") assertContract(typeof step.attribute === "string" && step.attribute.length > 0, `${label}.attribute must be a non-empty string`);
     if (step.op === "readComputedStyle") assertContract(Array.isArray(step.properties) && step.properties.length > 0 && step.properties.every((property) => typeof property === "string" && property.length > 0), `${label}.properties must be a non-empty string array`);
   });
@@ -729,6 +742,14 @@ class FlowRuntime {
   }
 
   async runStep(step, outputs) {
+    if (["observe", "editorRead", "editorPatch"].includes(step.op)) {
+      const locator = this.locate(step.target ? effectiveStepTarget(step) : { css: "body" });
+      const options = { ...step, timeoutMs: step.timeoutMs || this.defaultTimeoutMs };
+      outputs[step.as || step.op] = step.op === "observe"
+        ? await observe(locator, options)
+        : await editorOperation(locator, options);
+      return;
+    }
     if (step.op === "setContent") {
       await this.page.setContent(step.html, { waitUntil: step.waitUntil || "domcontentloaded", ...(step.timeoutMs ? { timeout: step.timeoutMs } : {}) });
       return;
@@ -1182,7 +1203,7 @@ const targetSchema = {
 
 const stepSchema = {
   type: "object",
-  description: "One operation. fill/type accept value or text; wait accepts target or ms; waitForTimeout accepts ms or timeoutMs; setInputFiles accepts files or paths; goto/reload/setContent/evaluate do not use target.",
+  description: "One operation. fill/type accept value or text; wait accepts target or ms; waitForTimeout accepts ms or timeoutMs; setInputFiles accepts files or paths; observe accepts an optional scope target; editorRead/editorPatch require a precise editor target. goto/reload/setContent/evaluate do not require target.",
   properties: {
     op: { type: "string", enum: [...supportedSteps] },
     target: targetSchema,
@@ -1192,13 +1213,16 @@ const stepSchema = {
     text: { type: "string", description: "Alias for value on fill/type." },
     files: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, description: "Absolute file paths for setInputFiles." },
     paths: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, description: "Alias for files on setInputFiles." },
+    oldText: { type: "string", minLength: 1, description: "editorPatch: exact text to replace; must occur once." },
+    newText: { type: "string", description: "editorPatch replacement text; no automatic save." },
+    expectedHash: { type: "string", pattern: "^[a-f0-9]{64}$", description: "editorPatch optional SHA-256 from editorRead; reject changed content." },
     key: { type: "string", minLength: 1 },
     delay: { type: "number", minimum: 0 },
     state: { type: "string", enum: ["attached", "detached", "visible", "hidden"] },
     ms: { type: "integer", minimum: 0, maximum: MAX_OPERATION_TIMEOUT_MS },
     first: { type: "boolean", description: "Shorthand for target.first." },
     nth: { type: "integer", minimum: 0, description: "Shorthand for target.nth." },
-    maxChars: { type: "integer", minimum: 1, description: "Bound each readText/readAllText string and mark truncation." },
+    maxChars: { type: "integer", minimum: 1, description: "Bound text reads, observe snapshots, or editorRead text; truncation is reported." },
     attribute: { type: "string", minLength: 1 },
     properties: { type: "array", minItems: 1, items: { type: "string", minLength: 1 } },
     as: { type: "string", minLength: 1, description: "Output key for reads/evaluate." },

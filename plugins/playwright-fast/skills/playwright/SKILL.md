@@ -23,7 +23,11 @@ When controls are known, batch related actions, final reads, and assertions in o
 }
 ```
 
-On an unfamiliar page, make one compact scoped discovery read, then batch dependent actions.
+On an unfamiliar page, use `{"op":"observe","as":"page"}` (or add a scoped `target`) rather
+than generating DOM-probing JavaScript. It returns a bounded accessibility snapshot and visible
+control metadata. Append observe after known actions in the same run when the next decision needs
+new page state. An observation is not proof that asynchronous application data finished loading;
+wait for a known resulting control when needed. Then batch dependent actions.
 Inspect actual visible controls (tag/role, label, text, placeholder, selected value, and stable
 selector as needed); nearby `innerText` alone does not prove a button name or click target.
 Prefer `role` with `name`, then `label`, `placeholder`, `testId`, and scoped `css`. Use `within`
@@ -41,6 +45,24 @@ Do not gzip/base64 evidence or replace a fresh post-action check with cached obs
 For log extraction, see [bounded-reads.md](references/bounded-reads.md). Large output previews may
 include `outputArtifact` pointing to the complete local JSON; inspect a relevant slice only when
 needed instead of printing the entire artifact back into context.
+
+## Code editors
+
+Use `editorRead` on an explicit editor container or textarea before editing. It returns bounded
+text, full-content SHA-256 `hash`, `totalChars`, `truncated`, and the detected adapter. For an exact
+change use `editorPatch` with non-empty `oldText`, `newText`, and preferably `expectedHash` from
+the read. The old text must occur exactly once; conflicts, ambiguous editors, unsupported adapters,
+and read-only editors fail without an intended write. Successful patch results report `changed`
+and `verified`; they do not mean the application saved to its server.
+
+```json
+{"steps":[{"op":"editorPatch","target":{"css":"#pipeline-editor"},
+"oldText":"curl -T ","newText":"curl --fail-with-body --upload-file ","as":"patch"}]}
+```
+
+The selector above is an example; select the observed editor. Batch patch, an authorized Save click,
+and a known success check when available. Verify persistence after reload. Do not retry a mutation
+blindly after a later failure. See [editors.md](references/editors.md) for adapter boundaries.
 
 ## Timing and contract essentials
 
@@ -75,8 +97,9 @@ synthetic fixture, not real application integration.
 
 Inspect `ok`, `failureKind`, and the failing phase. Fix all `contractErrors` together and rerun the
 minimal contract; invalid contracts execute no browser actions or screenshots. A syntax/parameter
-failure needs correction, not a diagnostic browser call. For locator/assertion failures, preserve
-the page and make one targeted scoped read with `ultra`; use `diag` only when visual evidence or its
+failure needs correction, not a diagnostic browser call. For locator failures, inspect the returned `failureObservation` first; it is a bounded, best-effort
+read of the current top-level page and may differ from an iframe failure scope. Preserve the page.
+For unresolved locator/assertion failures, make one targeted scoped read with `ultra`; use `diag` only when visual evidence or its
 extra diagnostics are needed. Multiple matches require a more precise locator, not a longer timeout.
 Omit `url` during current-page diagnosis; repeat mock rules only if navigating or fetching again.
 

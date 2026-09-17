@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.0 — 2026-09-17
+
+- Add scoped `observe` with bounded accessibility snapshots, visible controls, dialogs, and editor
+  metadata. Locator failures include a best-effort observation to avoid a separate diagnostic turn.
+- Add `editorRead` and `editorPatch` for native text controls and associated Monaco instances, with
+  bounded React wrapper compatibility, exact unique matches, optional SHA-256 conflict guards,
+  read-only checks, and full immediate readback. Editing never automatically saves the application.
+- Document compact observation/editing flows and distinguish editor verification from persistence.
+
+Validation: local Chromium/MCP flow completes observe/read and patch/save/reload/read in two run
+requests without evaluate steps; conflict, duplicate-match, read-only, and failure-observation checks
+pass. Real Monaco 0.52.2 was additionally tested with a temporary local fixture. No production flow
+was replayed and no model-latency improvement percentage is claimed.
+
 ## 1.3.0 — 2026-09-16
 
 - Bound large MCP outputs with a structured preview and a private local JSON artifact containing
