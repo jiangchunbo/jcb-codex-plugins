@@ -25,9 +25,13 @@ When controls are known, batch related actions, final reads, and assertions in o
 
 On an unfamiliar page, use `{"op":"observe","as":"page"}` (or add a scoped `target`) rather
 than generating DOM-probing JavaScript. It returns a bounded accessibility snapshot and visible
-control metadata. Append observe after known actions in the same run when the next decision needs
+control metadata. Reuse a returned `target` in the same frame; its CSS was unique at observation time.
+`labels` are actual label text; an accessible name alone does not imply a label locator.
+Editor `category: "field"` means an ordinary multiline/editable field, not a confirmed code editor;
+select `category: "code"` for Monaco/CodeMirror/Ace, then check the supported editor adapter.
+Append observe after known actions in the same run when the next decision needs
 new page state. An observation is not proof that asynchronous application data finished loading;
-wait for a known resulting control when needed. Then batch dependent actions.
+wait for a known resulting control when needed instead of adding fixed sleeps. Then batch dependent actions.
 Inspect actual visible controls (tag/role, label, text, placeholder, selected value, and stable
 selector as needed); nearby `innerText` alone does not prove a button name or click target.
 Prefer `role` with `name`, then `label`, `placeholder`, `testId`, and scoped `css`. Use `within`
@@ -97,7 +101,7 @@ synthetic fixture, not real application integration.
 
 Inspect `ok`, `failureKind`, and the failing phase. Fix all `contractErrors` together and rerun the
 minimal contract; invalid contracts execute no browser actions or screenshots. A syntax/parameter
-failure needs correction, not a diagnostic browser call. For locator failures, inspect the returned `failureObservation` first; it is a bounded, best-effort
+failure needs correction, not a diagnostic browser call. For locator failures, inspect the returned `failureObservation` first (a unique visible dialog is prioritized); it is a bounded, best-effort
 read of the current top-level page and may differ from an iframe failure scope. Preserve the page.
 For unresolved locator/assertion failures, make one targeted scoped read with `ultra`; use `diag` only when visual evidence or its
 extra diagnostics are needed. Multiple matches require a more precise locator, not a longer timeout.

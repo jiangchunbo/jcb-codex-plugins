@@ -325,7 +325,7 @@ class PersistentRuntime {
       const failureKind = classifyFailure(error, phase);
       let failureObservation;
       if (failureKind === "locator" && this.page && !this.page.isClosed()) {
-        try { failureObservation = await observe(this.page.locator("body"), { maxChars: 2500, timeoutMs: 500 }); } catch {}
+        try { failureObservation = await observe(this.page.locator("body"), { maxChars: 2500, timeoutMs: 500, preferDialog: true }); } catch {}
       }
       if (failureKind !== "contract" && (evidence === "visual" || evidence === "diag") && !image && this.page && !this.page.isClosed()) {
         try {

@@ -113,7 +113,8 @@ test('MCP observes, edits, saves and reloads a pipeline without evaluate steps',
     ] });
     assert.equal(missing.ok, false);
     assert.equal(missing.failureKind, 'locator');
-    assert.match(missing.failureObservation.ariaSnapshot, /Save pipeline/);
+    assert.equal(missing.failureObservation.scope, 'dialog');
+    assert.match(missing.failureObservation.ariaSnapshot, /Editor help/);
     assert.equal(writes, 1);
   } finally {
     child.stdin.end();

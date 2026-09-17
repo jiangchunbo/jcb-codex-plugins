@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.1 — 2026-09-17
+
+- Distinguish code editor containers from ordinary multiline fields and omit their internal
+  textareas from editor candidates. Include actual label metadata without form contents.
+- Suggest CSS targets only after document-wide uniqueness checks; duplicate placeholders and
+  shadow-root controls do not receive guessed targets. Frame context remains caller-owned.
+- Prioritize a single visible dialog in automatic failure observations; preserve full requested
+  scope when dialogs are ambiguous. Document condition waits and reusable targets.
+
+Validation: Chromium regression fixtures cover description/code discrimination, duplicate
+selectors, label-value privacy, and dialog recovery. End-to-end model speedup is not claimed.
+
 ## 1.4.0 — 2026-09-17
 
 - Add scoped `observe` with bounded accessibility snapshots, visible controls, dialogs, and editor

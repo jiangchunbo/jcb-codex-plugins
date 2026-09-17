@@ -34,7 +34,7 @@ test('observe scopes to dialog and includes the root control', async t => {
   assert.equal(result.dialogs.length, 1);
   assert.doesNotMatch(result.ariaSnapshot, /Outside/);
   const button = await observe(page.locator('#save'));
-  assert.deepEqual(button.controls, [{ tag: 'button', id: 'save', disabled: true }]);
+  assert.deepEqual(button.controls, [{ tag: 'button', id: 'save', target: { css: '#save' }, disabled: true }]);
 });
 test('observe bounds snapshot and metadata and works inside frames', async t => {
   const page = await fixture(t, '<iframe></iframe>');
@@ -54,4 +54,40 @@ test('observe detects contenteditable and excludes aria-hidden shadow hosts', as
   assert.equal(result.editors[0].kind, 'contenteditable');
   assert.doesNotMatch(JSON.stringify(result), /Shadow hidden/);
   assert.equal(result.controls.filter(x => x.tag === 'button').length, 0);
+});
+
+
+test('observe distinguishes description fields from code and suggests only unique selectors', async t => {
+  const page = await fixture(t, `<label for="description">Description</label><textarea id="description"></textarea>
+    <input placeholder="Email"><input placeholder="Repeated"><input placeholder="Repeated">
+    <div class="monaco-editor" id="code"><textarea></textarea></div>`);
+  const result = await observe(page.locator('body'));
+  assert.equal(result.editors.length, 2);
+  assert.equal(result.editors[0].category, 'field');
+  assert.equal(result.editors[0].codeEditorConfirmed, false);
+  assert.deepEqual(result.editors[0].labels, ['Description']);
+  assert.equal(result.editors[1].category, 'code');
+  const email = result.controls.find(x => x.placeholder === 'Email');
+  assert.equal(await page.locator(email.target.css).count(), 1);
+  assert.ok(result.controls.filter(x => x.placeholder === 'Repeated').every(x => !x.target));
+});
+
+test('failure recovery observes a unique dialog and leaves ambiguous dialogs unselected', async t => {
+  const page = await fixture(t, '<nav>Unrelated navigation</nav><dialog open><button>Confirm</button></dialog>');
+  const focused = await observe(page.locator('body'), { preferDialog: true });
+  assert.equal(focused.scope, 'dialog');
+  assert.doesNotMatch(focused.ariaSnapshot, /Unrelated navigation/);
+  assert.match(focused.ariaSnapshot, /Confirm/);
+  await page.locator('body').evaluate(el => el.insertAdjacentHTML('beforeend', '<dialog open>Other</dialog>'));
+  assert.equal((await observe(page.locator('body'), { preferDialog: true })).scope, 'requested');
+});
+
+
+test('label metadata does not disclose nested field contents', async t => {
+  const page = await fixture(t, '<label>Description<textarea>PRIVATE_NESTED</textarea></label>');
+  const result = await observe(page.locator('body'));
+  // ARIA names can reflect label contents; metadata itself must never copy nested values.
+  assert.doesNotMatch(JSON.stringify(result.controls), /PRIVATE_NESTED/);
+  assert.doesNotMatch(JSON.stringify(result.editors), /PRIVATE_NESTED/);
+  assert.deepEqual(result.editors[0].labels, ['Description']);
 });
